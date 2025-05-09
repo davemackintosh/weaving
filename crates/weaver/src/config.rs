@@ -59,6 +59,7 @@ impl WeaverConfig {
                 version: "1".into(),
                 base_dir: inst.base_dir.clone(),
                 content_dir: format!("{}/{}", &inst.base_dir, inst.content_dir),
+                template_dir: format!("{}/{}", &inst.base_dir, inst.template_dir),
                 base_url: inst.base_url,
                 includes_dir: format!("{}/{}", &inst.base_dir, inst.includes_dir),
                 public_dir: format!("{}/{}", &inst.base_dir, inst.public_dir),
@@ -131,6 +132,7 @@ impl WeaverConfig {
             includes_dir: format!("{}/{}", &base_path, user_supplied_config.includes_dir),
             public_dir: format!("{}/{}", &base_path, user_supplied_config.public_dir),
             build_dir: format!("{}/{}", &base_path, user_supplied_config.build_dir),
+            template_dir: format!("{}/{}", &base_path, user_supplied_config.template_dir),
             templating_language: user_supplied_config.templating_language,
         }
     }

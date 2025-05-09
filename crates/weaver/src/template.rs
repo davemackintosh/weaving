@@ -1,8 +1,8 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct Template {
-    pub at_path: String,
+    pub at_path: PathBuf,
     pub contents: String,
 }
 
@@ -16,7 +16,7 @@ impl Template {
         }
 
         Self {
-            at_path: path.to_str().unwrap().to_string(),
+            at_path: path,
             contents: contents_result.unwrap(),
         }
     }

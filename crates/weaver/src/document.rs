@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug)]
 pub struct Document {
@@ -6,6 +6,7 @@ pub struct Document {
     pub tags: Vec<String>,
     pub markdown: String,
     pub html: Option<String>,
+    pub frontmatter: HashMap<String, String>,
 }
 
 impl Document {
@@ -22,6 +23,7 @@ impl Document {
             tags: vec![],
             markdown: contents_result.unwrap(),
             html: None,
+            frontmatter: HashMap::new(),
         }
     }
 }
