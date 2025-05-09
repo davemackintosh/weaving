@@ -26,7 +26,9 @@ impl Error for BuildError {}
 
 impl Display for BuildError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
+        match self {
+            BuildError::Err(err) => write!(f, "{}", err),
+        }
     }
 }
 
@@ -95,8 +97,19 @@ impl Weaver {
     // Modified to not take &self
     async fn build_document(document: Arc<Mutex<Document>>) -> Result<(), BuildError> {
         let mut doc = document.lock().await;
-        // Use the markdown body from the document struct (already separated by gray_matter)
-        match markdown::to_html_with_options(&doc.markdown, &markdown::Options::gfm()) {
+        match markdown::to_html_with_options(
+            &doc.markdown,
+            &markdown::Options {
+                parse: markdown::ParseOptions {
+                    constructs: markdown::Constructs {
+                        frontmatter: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        ) {
             Ok(html) => {
                 dbg!(format!("Built document: {:?}", &html));
                 doc.html = Some(html);
@@ -115,11 +128,14 @@ impl Weaver {
         template: Arc<Mutex<TemplateRenderer>>,
         context: RenderContext, // Pass the context by value (it contains Arcs)
     ) -> Result<(), BuildError> {
-        let mut template_guard = template.lock().await;
+        let template_guard = template.lock().await;
+        let data = liquid::object!({
+            "tags": context.tags
+        });
 
         // Call the render method on TemplateRenderer, passing a reference to the context
         // You'll need to update TemplateRenderer::render to accept &RenderContext
-        template_guard.render(&context).await; // Assuming render is async and takes &RenderContext
+        template_guard.render(&data).unwrap();
         Ok(())
     }
 

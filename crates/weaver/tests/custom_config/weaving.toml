@@ -1,4 +1,4 @@
-content_path = "web-content"
+content_dir = "web-content"
 base_url = "localhost:9090"
 includes_dir = "partials"
 public_dir = "static"
