@@ -171,7 +171,7 @@ mod test {
             .to_str()
             .unwrap()
             .to_string();
-        let base_path = format!("{}/tests/empty_config", base_path_wd);
+        let base_path = format!("{}/test_fixtures/config/empty_config", base_path_wd);
         let config = WeaverConfig::new_from_path(base_path.clone());
 
         assert_eq!(config.base_dir, base_path);
@@ -191,7 +191,7 @@ mod test {
             .to_str()
             .unwrap()
             .to_string();
-        let base_path = format!("{}/tests/custom_config", base_path_wd);
+        let base_path = format!("{}/test_fixtures/config/custom_config", base_path_wd);
         let config = WeaverConfig::new_from_path(base_path.clone());
 
         assert_eq!(config.base_dir, base_path);
@@ -211,7 +211,7 @@ mod test {
             .to_str()
             .unwrap()
             .to_string();
-        let base_path = format!("{}/tests/partial_config", base_path_wd);
+        let base_path = format!("{}/test_fixtures/config/partial_config", base_path_wd);
         let config = WeaverConfig::new_from_path(base_path.clone());
 
         assert_eq!(config.base_dir, base_path);

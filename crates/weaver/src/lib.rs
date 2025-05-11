@@ -1,7 +1,7 @@
 use document::Document;
 use futures::future::join_all;
 use glob::glob;
-use renderers::TemplateRenderer;
+use renderers::{Renderer, TemplateRenderer};
 use std::{error::Error, fmt::Display, sync::Arc};
 use template::Template;
 use tokio::sync::Mutex;
