@@ -1,8 +1,13 @@
 use document::Document;
 use futures::future::join_all;
 use glob::glob;
-use renderers::{Renderer, TemplateRenderer};
-use std::{error::Error, fmt::Display, sync::Arc};
+use renderers::{MarkdownRenderer, TemplateRenderer};
+use std::{
+    error::Error,
+    fmt::Display,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use template::Template;
 use tokio::sync::Mutex;
 
@@ -38,14 +43,75 @@ impl Display for BuildError {
 pub struct RenderContext {
     pub config: Arc<WeaverConfig>,
     pub documents: Arc<Vec<Arc<Mutex<Document>>>>,
-    pub templates: Arc<Vec<Arc<Mutex<TemplateRenderer>>>>,
+    pub templates: Arc<Vec<Arc<Mutex<Template>>>>,
     pub tags: Vec<String>,
+    pub routes: Vec<String>,
+}
+
+impl RenderContext {
+    pub async fn to_liquid_data(&self) -> liquid::Object {
+        // 1. Config
+        let mut liquid_object = liquid::object!({
+            "config": *self.config.clone(),
+        });
+
+        // 2. Documents
+        let document_futures: Vec<_> = self
+            .documents
+            .iter()
+            .map(|doc_arc| {
+                let doc_arc_clone = Arc::clone(doc_arc);
+                async move {
+                    let doc_guard = doc_arc_clone.lock().await;
+                    liquid::model::to_value(&*doc_guard).expect("Failed to serialize document")
+                }
+            })
+            .collect();
+        let liquid_documents: Vec<liquid::model::Value> = join_all(document_futures).await;
+        liquid_object.insert(
+            "documents".into(),
+            liquid::model::Value::array(liquid_documents),
+        );
+
+        // 3. Templates (assuming Template or TemplateRenderer can be serialized)
+        let template_futures: Vec<_> = self
+            .templates
+            .iter()
+            .map(|tmpl_arc| {
+                let tmpl_arc_clone = Arc::clone(tmpl_arc);
+                async move {
+                    let tmpl_guard = tmpl_arc_clone.lock().await;
+                    liquid::model::to_value(&*tmpl_guard).expect("Failed to serialize template")
+                }
+            })
+            .collect();
+        let liquid_templates: Vec<liquid::model::Value> = join_all(template_futures).await;
+        liquid_object.insert(
+            "templates".into(),
+            liquid::model::Value::array(liquid_templates),
+        );
+
+        // 4. Tags (Vec<String> converts easily)
+        liquid_object.insert(
+            "tags".into(),
+            liquid::model::to_value(&self.tags).expect("Failed to serialize tags"),
+        );
+
+        // 5. Routes (Vec<String> converts easily)
+        liquid_object.insert(
+            "routes".into(),
+            liquid::model::to_value(&self.routes).expect("Failed to serialize routes"),
+        );
+
+        liquid_object
+    }
 }
 
 pub struct Weaver {
     pub config: Arc<WeaverConfig>,
     pub tags: Vec<String>,
-    pub templates: Vec<Arc<Mutex<TemplateRenderer>>>,
+    pub routes: Vec<String>,
+    pub templates: Vec<Arc<Mutex<Template>>>,
     pub documents: Vec<Arc<Mutex<Document>>>,
 }
 
@@ -54,9 +120,86 @@ impl Weaver {
         Self {
             config: Arc::new(WeaverConfig::new_from_path(base_path)),
             tags: vec![],
+            routes: vec![],
             templates: vec![],
             documents: vec![],
         }
+    }
+
+    fn route_from_path(&self, path: PathBuf) -> String {
+        // Ensure content_dir is an absolute path for robust stripping
+        let content_dir = PathBuf::from(&self.config.content_dir);
+
+        // 1. Strip the base content directory prefix
+        let relative_path = match path.strip_prefix(&content_dir) {
+            Ok(p) => p,
+            Err(_) => {
+                // This should ideally not happen if paths are correctly managed.
+                // Or it means the path is outside the content directory.
+                // Handle this error case appropriately, e.g., panic, return an error, or log.
+                // For now, let's just return a simplified version of the original path.
+                eprintln!(
+                    "Warning: Path {:?} is not within content directory {:?}",
+                    path, content_dir
+                );
+                return format!(
+                    "/{}",
+                    path.file_name().unwrap_or_default().to_string_lossy()
+                );
+            }
+        };
+
+        let mut route_parts: Vec<String> = relative_path
+            .components()
+            .filter_map(|c| {
+                // Filter out '.' and '..' components, and root/prefix components
+                match c {
+                    std::path::Component::Normal(os_str) => {
+                        Some(os_str.to_string_lossy().into_owned())
+                    }
+                    _ => None,
+                }
+            })
+            .collect();
+
+        // 2. Handle file extension and "pretty URLs"
+        if let Some(last_segment) = route_parts.pop() {
+            let original_filename_path = Path::new(&last_segment);
+
+            if original_filename_path.file_stem().is_some() {
+                let stem = original_filename_path
+                    .file_stem()
+                    .unwrap()
+                    .to_string_lossy();
+
+                if stem == "index" {
+                    // If it's an index file, the URI is just its parent directory
+                    // The parent directory is already represented by the remaining route_parts
+                    // So, no need to add "index" to the route.
+                    // Example: content/posts/index.md -> /posts/
+                } else {
+                    // For other files, use the stem as the segment and add a trailing slash
+                    // Example: content/posts/my-post.md -> /posts/my-post/
+                    route_parts.push(stem.into_owned());
+                }
+            }
+        }
+
+        // 3. Join parts with forward slashes and ensure leading/trailing slashes
+        let mut route = format!("/{}", route_parts.join("/"));
+
+        // Ensure trailing slash for directories, unless it's the root '/'
+        if route.len() > 1 {
+            route.push('/');
+        }
+
+        // Special case for root index.md (e.g., content/index.md -> /)
+        // If the original relative_path was just "index.md"
+        if relative_path.to_string_lossy() == "index.md" {
+            route = "/".to_string();
+        }
+
+        route
     }
 
     pub fn scan_content(&mut self) -> &mut Self {
@@ -65,9 +208,12 @@ impl Weaver {
             .expect("Failed to read glob pattern")
         {
             match entry {
-                Ok(path) => self
-                    .documents
-                    .push(Arc::new(Mutex::new(Document::new_from_path(path)))),
+                Ok(path) => {
+                    let mut doc = Document::new_from_path(path.clone());
+                    self.tags.append(&mut doc.metadata.tags);
+                    self.routes.push(self.route_from_path(path.clone()));
+                    self.documents.push(Arc::new(Mutex::new(doc)))
+                }
                 Err(e) => panic!("{:?}", e),
             }
         }
@@ -86,57 +232,12 @@ impl Weaver {
             match entry {
                 Ok(pathbuf) => self
                     .templates
-                    .push(Arc::new(Mutex::new(TemplateRenderer::new(pathbuf)))),
+                    .push(Arc::new(Mutex::new(Template::new_from_path(pathbuf)))),
                 Err(e) => panic!("{:?}", e),
             }
         }
 
         self
-    }
-
-    // Modified to not take &self
-    async fn build_document(document: Arc<Mutex<Document>>) -> Result<(), BuildError> {
-        let mut doc = document.lock().await;
-        match markdown::to_html_with_options(
-            &doc.markdown,
-            &markdown::Options {
-                parse: markdown::ParseOptions {
-                    constructs: markdown::Constructs {
-                        frontmatter: true,
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-        ) {
-            Ok(html) => {
-                dbg!(format!("Built document: {:?}", &html));
-                doc.html = Some(html);
-            }
-            Err(err) => {
-                // markdown crate uses markdown::message::Message for errors
-                // Convert it to your BuildError
-                return Err(BuildError::Err(err.reason));
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn render_template(
-        template: Arc<Mutex<TemplateRenderer>>,
-        context: RenderContext, // Pass the context by value (it contains Arcs)
-    ) -> Result<(), BuildError> {
-        let template_guard = template.lock().await;
-        let data = liquid::object!({
-            "tags": context.tags
-        });
-
-        // Call the render method on TemplateRenderer, passing a reference to the context
-        // You'll need to update TemplateRenderer::render to accept &RenderContext
-        template_guard.render(&data).unwrap();
-        Ok(())
     }
 
     pub async fn build(&self) -> Result<(), BuildError> {
@@ -147,25 +248,31 @@ impl Weaver {
         let documents_arc = Arc::new(self.documents.clone());
         let templates_arc = Arc::new(self.templates.clone());
         let tags_vec = self.tags.clone();
+        let routes_vec = self.routes.clone();
 
         // Create the RenderContext template
         let render_context_template = RenderContext {
             config: Arc::clone(&config_arc), // Clone Arcs for the context template
             documents: Arc::clone(&documents_arc),
             templates: Arc::clone(&templates_arc),
+            routes: routes_vec,
             tags: tags_vec,
         };
+        let task_context = Arc::new(render_context_template.to_liquid_data().await);
         // --- End Prepare shared data ---
 
-        // Create a vector to hold our asynchronous tasks (futures)
+        // Create a vector to hold our futures
         let mut tasks = vec![];
 
         // Spawn tasks for building documents
         for document in &self.documents {
             let document_arc = Arc::clone(document); // Clone the Arc for this specific document
+            let context = Arc::clone(&task_context);
             let doc_task = tokio::spawn(async move {
-                // The async move block takes ownership of document_arc
-                Weaver::build_document(document_arc).await // Call the associated function
+                // First we render the HTML which may, or may not contain liquid syntax before we
+                // pass it through the liquid renderer to get the final document.
+                let md_renderer = MarkdownRenderer::new(document_arc);
+                md_renderer.render(&context).await
             });
             tasks.push(doc_task);
         }
@@ -173,17 +280,18 @@ impl Weaver {
         // Spawn tasks for parsing templates
         for template in &self.templates {
             let template_arc = Arc::clone(template); // Clone the Arc for this specific template
-            let task_context = render_context_template.clone(); // Clone the context for this task
+            let context = Arc::clone(&task_context);
             let template_task = tokio::spawn(async move {
-                // The async move block takes ownership of template_arc and task_context
-                Weaver::render_template(template_arc, task_context).await // Call the associated function
+                let renderer = TemplateRenderer::new(template_arc);
+
+                renderer.render(&context).await
             });
             tasks.push(template_task);
         }
 
         // Wait for all tasks to complete and collect their results
         // The outer Result is JoinError, the inner Result is from your async function
-        let results: Vec<Result<Result<(), BuildError>, tokio::task::JoinError>> =
+        let results: Vec<Result<Result<String, BuildError>, tokio::task::JoinError>> =
             join_all(tasks).await;
 
         // Check for errors in the results
@@ -207,5 +315,30 @@ impl Weaver {
 
         dbg!("Build process finished successfully");
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_route_from_path() {
+        let base_path_wd = std::env::current_dir()
+            .unwrap()
+            .as_os_str()
+            .to_os_string()
+            .to_str()
+            .unwrap()
+            .to_string();
+        let base_path = format!("{}/test_fixtures/config", base_path_wd);
+        let inst = Weaver::new(format!("{}/custom_config", base_path));
+
+        assert_eq!(
+            "/blog/post1/",
+            inst.route_from_path(format!("{}/blog/post1.md", inst.config.content_dir).into())
+        );
     }
 }

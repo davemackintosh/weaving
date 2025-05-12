@@ -1,13 +1,13 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum TemplateLang {
     #[default]
     Liquid,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct WeaverConfig {
     pub version: String,
@@ -37,7 +37,7 @@ impl Default for WeaverConfig {
             includes_dir: "includes".into(),
             public_dir: "public".into(),
             build_dir: "site".into(),
-            template_dir: "templats".into(),
+            template_dir: "templates".into(),
             templating_language: TemplateLang::Liquid,
         }
     }
@@ -109,12 +109,14 @@ impl WeaverConfig {
     }
 
     pub fn new_from_path(base_path: String) -> Self {
-        let config_file_result = std::fs::read_to_string(format!("{}/weaving.toml", base_path));
+        // Remove any trailing slash.
+        let safe_path = base_path.trim_end_matches('/').to_string();
+        let config_file_result = std::fs::read_to_string(format!("{}/weaving.toml", safe_path));
 
         if config_file_result.is_err() {
-            panic!("Didn't find a weaving.toml at '{}'", &base_path);
+            panic!("Didn't find a weaving.toml at '{}'", &safe_path);
         } else {
-            dbg!(format!("Found config file at '{}/weaving.toml'", base_path));
+            dbg!(format!("Found config file at '{}/weaving.toml'", safe_path));
         }
 
         let user_supplied_config: WeaverConfig =
@@ -126,13 +128,13 @@ impl WeaverConfig {
 
         Self {
             version: user_supplied_config.version,
-            base_dir: base_path.clone(),
-            content_dir: format!("{}/{}", &base_path, user_supplied_config.content_dir),
+            base_dir: safe_path.clone(),
+            content_dir: format!("{}/{}", &safe_path, user_supplied_config.content_dir),
             base_url: user_supplied_config.base_url,
-            includes_dir: format!("{}/{}", &base_path, user_supplied_config.includes_dir),
-            public_dir: format!("{}/{}", &base_path, user_supplied_config.public_dir),
-            build_dir: format!("{}/{}", &base_path, user_supplied_config.build_dir),
-            template_dir: format!("{}/{}", &base_path, user_supplied_config.template_dir),
+            includes_dir: format!("{}/{}", &safe_path, user_supplied_config.includes_dir),
+            public_dir: format!("{}/{}", &safe_path, user_supplied_config.public_dir),
+            build_dir: format!("{}/{}", &safe_path, user_supplied_config.build_dir),
+            template_dir: format!("{}/{}", &safe_path, user_supplied_config.template_dir),
             templating_language: user_supplied_config.templating_language,
         }
     }
@@ -195,7 +197,7 @@ mod test {
         let config = WeaverConfig::new_from_path(base_path.clone());
 
         assert_eq!(config.base_dir, base_path);
-        assert_eq!(config.content_dir, format!("{}/web-content", base_path));
+        assert_eq!(config.content_dir, format!("{}/content", base_path));
         assert_eq!(config.includes_dir, format!("{}/partials", base_path));
         assert_eq!(config.public_dir, format!("{}/static", base_path));
         assert_eq!(config.build_dir, format!("{}/site", base_path));

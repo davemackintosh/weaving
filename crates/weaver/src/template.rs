@@ -1,9 +1,14 @@
-use std::path::PathBuf;
+use std::{ffi::OsStr, path::PathBuf};
 
-#[derive(Debug)]
+use serde::{Deserialize, Serialize};
+
+use crate::config::TemplateLang;
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Template {
     pub at_path: PathBuf,
     pub contents: String,
+    pub template_language: TemplateLang,
 }
 
 impl Template {
@@ -16,8 +21,15 @@ impl Template {
         }
 
         Self {
-            at_path: path,
+            at_path: path.clone(),
             contents: contents_result.unwrap(),
+            template_language: match path.clone().extension().and_then(OsStr::to_str).unwrap() {
+                "liquid" => TemplateLang::Liquid,
+                _ => panic!(
+                    "Not sure what templating engine to use for this file. {}",
+                    path.display()
+                ),
+            },
         }
     }
 }

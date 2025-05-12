@@ -10,5 +10,7 @@ markdown = "1.0.0"
 pretty_assertions = "1.4.1"
 glob = "0.3.2"
 liquid = "0.26.11"
-tokio = { version = "1.45.0", features = ["sync", "rt"] }
+tokio = { version = "1.45.0", features = ["sync", "rt", "macros"] }
 futures = "0.3.31"
+gray_matter = "0.2.8"
+serde_json = "1.0.140"
