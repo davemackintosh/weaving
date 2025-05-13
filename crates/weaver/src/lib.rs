@@ -137,14 +137,11 @@ impl Weaver {
                 // This should ideally not happen if paths are correctly managed.
                 // Or it means the path is outside the content directory.
                 // Handle this error case appropriately, e.g., panic, return an error, or log.
-                // For now, let's just return a simplified version of the original path.
-                eprintln!(
+                // For now, let's just panic and halt the build because this won't output something
+                // visible or usable to anyone.
+                panic!(
                     "Warning: Path {:?} is not within content directory {:?}",
                     path, content_dir
-                );
-                return format!(
-                    "/{}",
-                    path.file_name().unwrap_or_default().to_string_lossy()
                 );
             }
         };
@@ -269,8 +266,6 @@ impl Weaver {
             let document_arc = Arc::clone(document); // Clone the Arc for this specific document
             let context = Arc::clone(&task_context);
             let doc_task = tokio::spawn(async move {
-                // First we render the HTML which may, or may not contain liquid syntax before we
-                // pass it through the liquid renderer to get the final document.
                 let md_renderer = MarkdownRenderer::new(document_arc);
                 md_renderer.render(&context).await
             });
@@ -340,5 +335,20 @@ mod test {
             "/blog/post1/",
             inst.route_from_path(format!("{}/blog/post1.md", inst.config.content_dir).into())
         );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_content_out_of_path() {
+        let base_path_wd = std::env::current_dir()
+            .unwrap()
+            .as_os_str()
+            .to_os_string()
+            .to_str()
+            .unwrap()
+            .to_string();
+        let base_path = format!("{}/test_fixtures/config", base_path_wd);
+        let inst = Weaver::new(format!("{}/custom_config", base_path));
+        inst.route_from_path("madeup/blog/post1.md".into());
     }
 }

@@ -1,8 +1,8 @@
 ---
 tags:
-  - 1
+  - "1"
 keywords:
-  - 2
+  - "2"
 ---
 excerpt
 ---

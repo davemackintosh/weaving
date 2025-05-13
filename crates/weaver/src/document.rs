@@ -1,41 +1,48 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use gray_matter::{Matter, engine::YAML};
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use toml::Value;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
+pub struct Heading {
+    pub depth: u8,
+    pub text: String,
+    pub slug: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Document {
     pub at_path: String,
     pub metadata: BaseMetaData,
     pub markdown: String,
     pub excerpt: Option<String>,
     pub html: Option<String>,
+    pub toc: Vec<Heading>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[serde(default)]
 pub struct BaseMetaData {
     pub title: String,
-    #[serde(deserialize_with = "deserialize_string_or_number_vec")]
     pub tags: Vec<String>,
-    #[serde(deserialize_with = "deserialize_string_or_number_vec")]
     pub keywords: Vec<String>,
+    pub template: String,
 
     #[serde(flatten)]
-    custom: HashMap<String, Value>,
+    user: HashMap<String, Value>,
 }
 
-pub fn deserialize_string_or_number_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let values: Vec<Value> = Vec::deserialize(deserializer)?;
-    let result: Vec<String> = values
-        .into_iter()
-        .map(|v| v.to_string().trim_matches('"').to_string())
-        .collect();
-
-    Ok(result)
+impl Default for BaseMetaData {
+    fn default() -> Self {
+        Self {
+            title: Default::default(),
+            tags: Default::default(),
+            keywords: Default::default(),
+            template: "default".into(),
+            user: Default::default(),
+        }
+    }
 }
 
 impl Document {
@@ -49,9 +56,6 @@ impl Document {
 
         dbg!("read post {}", contents_result.as_ref().unwrap());
 
-        // We parse both to a struct and to a plaid old data because it's helpful to have a
-        // concrete type for required metadata. Title, tags, etc are required but we also want a hashmap of
-        // sorts for any custom properties on a document.
         let matter = Matter::<YAML>::new();
         let parse_result = matter.parse(contents_result.as_ref().unwrap().as_str());
         let base_metadata_opt = parse_result
@@ -67,12 +71,16 @@ impl Document {
 
         let base_metadata = base_metadata_opt.unwrap();
 
+        if base_metadata.title.is_empty() {
+            panic!("title is required in your frontmatter!");
+        }
+
         Self {
             at_path: path.display().to_string(),
             metadata: base_metadata,
             markdown: parse_result.content,
             excerpt: parse_result.excerpt,
-            html: None,
+            ..Default::default()
         }
     }
 }
@@ -92,7 +100,6 @@ mod test {
             .unwrap()
             .to_string();
         let base_path = format!("{}/test_fixtures/markdown", base_path_wd);
-
         let document = Document::new_from_path(format!("{}/full_frontmatter.md", base_path).into());
 
         assert_eq!(
@@ -100,7 +107,8 @@ mod test {
                 tags: vec!["1".into()],
                 keywords: vec!["2".into()],
                 title: "test".into(),
-                custom: HashMap::new()
+                user: HashMap::new(),
+                template: "default".into(),
             },
             document.metadata
         )
