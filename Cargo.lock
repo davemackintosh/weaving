@@ -920,6 +920,7 @@ dependencies = [
  "glob",
  "gray_matter",
  "liquid",
+ "liquid-core",
  "markdown",
  "pretty_assertions",
  "serde",

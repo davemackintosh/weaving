@@ -9,8 +9,8 @@ use crate::document::BaseMetaData;
 pub struct LiquidGlobalsPage {
     pub route: KString,
     pub title: String,
-    pub body: Option<String>,
-    pub meta: Option<BaseMetaData>,
+    pub body: String,
+    pub meta: BaseMetaData,
     pub excerpt: Option<String>,
 }
 
@@ -28,8 +28,8 @@ impl From<&crate::Document> for LiquidGlobalsPage {
         Self {
             route: route_kstring,
             excerpt: value.excerpt.clone(),
-            meta: Some(value.metadata.clone()),
-            body: value.html.clone(),
+            meta: value.metadata.clone(),
+            body: value.html.clone().unwrap_or("".into()),
             title: value.metadata.title.clone(),
         }
     }
@@ -107,11 +107,11 @@ mod tests {
         let liquid_page = LiquidGlobalsPage {
             route: KString::from("/test"),
             title: "Test Page".to_string(),
-            body: Some("<p>Test Body</p>".to_string()),
-            meta: Some(BaseMetaData {
+            body: "<p>Test Body</p>".to_string(),
+            meta: BaseMetaData {
                 title: "Test Meta Title".to_string(),
                 ..Default::default()
-            }),
+            },
             excerpt: None,
         };
 
@@ -287,31 +287,31 @@ mod tests {
         let page_page = LiquidGlobalsPage {
             route: KString::from("/page"),
             title: "Page".to_string(),
-            body: Some("<p>page</p>".to_string()),
-            meta: Some(BaseMetaData {
+            body: "<p>page</p>".to_string(),
+            meta: BaseMetaData {
                 title: "Page Meta".to_string(),
                 ..Default::default()
-            }),
+            },
             excerpt: Some("page excerpt".to_string()),
         };
         let content_page_1 = LiquidGlobalsPage {
             route: KString::from("/post-1"),
             title: "Post 1".to_string(),
-            body: Some("<p>post1</p>".to_string()),
-            meta: Some(BaseMetaData {
+            body: "<p>post1</p>".to_string(),
+            meta: BaseMetaData {
                 title: "Post 1 Meta".to_string(),
                 ..Default::default()
-            }),
+            },
             excerpt: Some("post1 excerpt".to_string()),
         };
         let content_page_2 = LiquidGlobalsPage {
             route: KString::from("/about"),
             title: "About".to_string(),
-            body: None,
-            meta: Some(BaseMetaData {
+            body: "".into(),
+            meta: BaseMetaData {
                 title: "About Meta".to_string(),
                 ..Default::default()
-            }),
+            },
             excerpt: None,
         };
 

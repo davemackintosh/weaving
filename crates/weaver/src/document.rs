@@ -25,6 +25,7 @@ pub struct Document {
 #[serde(default)]
 pub struct BaseMetaData {
     pub title: String,
+    pub description: String,
     pub tags: Vec<String>,
     pub keywords: Vec<String>,
     pub template: String,
@@ -38,6 +39,7 @@ impl Default for BaseMetaData {
         Self {
             title: Default::default(),
             tags: Default::default(),
+            description: Default::default(),
             keywords: Default::default(),
             template: "default".into(),
             user: Default::default(),
@@ -107,6 +109,7 @@ mod test {
                 tags: vec!["1".into()],
                 keywords: vec!["2".into()],
                 title: "test".into(),
+                description: "test".into(),
                 user: HashMap::new(),
                 template: "default".into(),
             },

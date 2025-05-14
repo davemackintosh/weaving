@@ -21,6 +21,7 @@ use config::{TemplateLang, WeaverConfig};
 /// content locations can vary from user to user so afford them the opportunity to do so.
 pub mod config;
 pub mod document;
+pub mod filters;
 pub mod renderers;
 pub mod template;
 

@@ -8,6 +8,7 @@ use slug::slugify;
 use tokio::sync::Mutex;
 
 use crate::document::Heading;
+use crate::filters::raw_html::RawHtml;
 use crate::{BuildError, document::Document};
 
 pub enum TemplateRenderer {
@@ -20,7 +21,10 @@ pub enum TemplateRenderer {
 impl TemplateRenderer {
     pub fn new(template: Arc<Mutex<crate::Template>>) -> Self {
         Self::LiquidBuilder {
-            liquid_parser: liquid::ParserBuilder::with_stdlib().build().unwrap(),
+            liquid_parser: liquid::ParserBuilder::with_stdlib()
+                .filter(RawHtml)
+                .build()
+                .unwrap(),
             weaver_template: template.clone(),
         }
     }
@@ -156,7 +160,7 @@ impl MarkdownRenderer {
             markdown::to_html_with_options(doc_guard.markdown.as_str(), &markdown::Options::gfm())
                 .expect("failed to render markdown to html");
         let template_renderer = TemplateRenderer::new(template.clone());
-        data.page.body = Some(markdown_html);
+        data.page.body = markdown_html;
 
         template_renderer.render(&data.to_owned()).await
     }
@@ -242,6 +246,55 @@ mod test {
             renderer.toc_from_document(&Document::new_from_path(
                 format!("{}/with_headings.md", base_path).into(),
             ))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_render() {
+        let base_path_wd = std::env::current_dir().unwrap().display().to_string();
+        let liquid_base_path = format!("{}/test_fixtures/liquid", base_path_wd);
+        let md_base_path = format!("{}/test_fixtures/markdown", base_path_wd);
+        let doc_arc = Arc::new(Mutex::new(Document::new_from_path(
+            format!("{}/with_headings.md", md_base_path).into(),
+        )));
+        let template_arc = Arc::new(Mutex::new(crate::Template::new_from_path(
+            format!("{}/default.liquid", liquid_base_path).into(),
+        )));
+        let renderer = MarkdownRenderer::new(doc_arc.clone(), vec![template_arc].into());
+        let mut data = LiquidGlobals::new(doc_arc, &HashMap::new()).await;
+
+        assert_eq!(
+            r#"<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+
+		<title>test</title>
+		<link rel="icon" href="/static/favicon.ico" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+		<meta name="description" content="test"/>
+		<meta name="keywords" content="test"/>
+	</head>
+	<body>
+		<main>
+			<h1>test</h1>
+			<article>
+				<h1>heading 1</h1>
+<p>I am a paragraph.</p>
+<h2>heading &lt;span&gt;2&lt;/span&gt;</h2>
+<p>I'm the second paragraph.</p>
+<h3>heading 3</h3>
+<h4>heading 4</h4>
+<h5>heading 5</h5>
+<h6>heading 6</h6>
+			</article>
+		</main>
+	</body>
+</html>
+
+"#,
+            renderer.render(&mut data).await.unwrap()
         );
     }
 }
