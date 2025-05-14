@@ -21,7 +21,7 @@ pub struct Document {
     pub toc: Vec<Heading>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 #[serde(default)]
 pub struct BaseMetaData {
     pub title: String,

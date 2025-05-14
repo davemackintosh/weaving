@@ -11,3 +11,7 @@ Why weaving? I was looking for a static site generator that was well documented 
 Weaving.
 
 /shrug
+
+## Why are there so many unwrap and some panic!()?
+
+Well, frankly? This is for my blog and some passion projects. If other people like the idea of a config-less static site generator, I'm be super grateful for more patient folks to submit PRs improving it.

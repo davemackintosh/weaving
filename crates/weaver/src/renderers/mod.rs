@@ -1,11 +1,14 @@
+pub mod globals;
+use futures::StreamExt;
+use globals::LiquidGlobals;
 use std::sync::Arc;
 
-use markdown::{mdast::Node, ParseOptions};
+use markdown::{ParseOptions, mdast::Node};
 use slug::slugify;
 use tokio::sync::Mutex;
 
 use crate::document::Heading;
-use crate::{document::Document, BuildError};
+use crate::{BuildError, document::Document};
 
 pub enum TemplateRenderer {
     LiquidBuilder {
@@ -22,7 +25,7 @@ impl TemplateRenderer {
         }
     }
 
-    pub async fn render(&self, data: &liquid::model::Object) -> Result<String, BuildError> {
+    pub async fn render(&self, data: &LiquidGlobals) -> Result<String, BuildError> {
         match self {
             Self::LiquidBuilder {
                 liquid_parser,
@@ -33,7 +36,7 @@ impl TemplateRenderer {
                 match liquid_parser
                     .parse(&wtemplate.contents)
                     .unwrap()
-                    .render(&liquid::to_object(data).unwrap())
+                    .render(&data.to_liquid_data())
                 {
                     Ok(result) => Ok(result),
                     Err(err) => Err(BuildError::Err(err.to_string())),
@@ -45,11 +48,18 @@ impl TemplateRenderer {
 
 pub struct MarkdownRenderer {
     document: Arc<Mutex<Document>>,
+    templates: Arc<Vec<Arc<Mutex<crate::Template>>>>,
 }
 
 impl MarkdownRenderer {
-    pub fn new(document: Arc<Mutex<Document>>) -> Self {
-        Self { document }
+    pub fn new(
+        document: Arc<Mutex<Document>>,
+        templates: Arc<Vec<Arc<Mutex<crate::Template>>>>,
+    ) -> Self {
+        Self {
+            document,
+            templates,
+        }
     }
 
     // Helper function to recursively extract text from inline nodes
@@ -97,7 +107,7 @@ impl MarkdownRenderer {
                 headings_map.push(Heading {
                     slug,
                     text: heading_text,
-                    depth: heading.depth
+                    depth: heading.depth,
                 });
             }
         }
@@ -118,23 +128,44 @@ impl MarkdownRenderer {
         toc_map
     }
 
-    pub async fn render<D>(&self, _data: &D) -> Result<String, BuildError> {
-        let mut doc_guard = self.document.lock().await;
+    async fn find_template_by_string(
+        &self,
+        template_name: String,
+    ) -> Option<&Arc<Mutex<crate::Template>>> {
+        futures::stream::iter(self.templates.iter())
+            .filter(|&t| {
+                let name = template_name.clone();
+                Box::pin(
+                    async move { t.lock().await.at_path.ends_with(format!("{}.liquid", name)) },
+                )
+            })
+            .next()
+            .await
+    }
 
-        // Process the TOC.
+    pub async fn render(&self, data: &mut LiquidGlobals) -> Result<String, BuildError> {
+        let mut doc_guard = self.document.lock().await;
+        let template = self
+            .find_template_by_string(doc_guard.metadata.template.clone())
+            .await
+            .unwrap();
+
         doc_guard.toc = self.toc_from_document(&doc_guard);
 
-        // Return the html.
-        match markdown::to_html_with_options(doc_guard.markdown.as_str(), &markdown::Options::gfm())
-        {
-            Ok(html) => Ok(html),
-            Err(err) => Err(BuildError::Err(err.to_string())),
-        }
+        let markdown_html =
+            markdown::to_html_with_options(doc_guard.markdown.as_str(), &markdown::Options::gfm())
+                .expect("failed to render markdown to html");
+        let template_renderer = TemplateRenderer::new(template.clone());
+        data.page.body = Some(markdown_html);
+
+        template_renderer.render(&data.to_owned()).await
     }
 }
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
+
     use crate::template::Template;
 
     use super::*;
@@ -153,18 +184,17 @@ mod test {
         let base_path = format!("{}/test_fixtures/liquid", base_path_wd);
         let template = Template::new_from_path(format!("{}/template.liquid", base_path).into());
         let renderer = TemplateRenderer::new(Arc::new(Mutex::new(template)));
+        let doc_arc = Arc::new(Mutex::new(Document::new_from_path(
+            format!("{}/test_fixtures/markdown/with_headings.md", base_path_wd).into(),
+        )));
 
-        let data = liquid::object!({
-            "page": {
-            "title": "hello"
-        }
-        });
+        let data = LiquidGlobals::new(doc_arc, &HashMap::new()).await;
 
         assert_eq!(
             "<!doctype html>
 <html>
 	<head>
-		<title>hello</title>
+		<title>test</title>
 	</head>
 	<body></body>
 </html>
@@ -186,7 +216,7 @@ mod test {
         let doc_arc = Arc::new(Mutex::new(Document::new_from_path(
             format!("{}/with_headings.md", base_path).into(),
         )));
-        let renderer = MarkdownRenderer::new(doc_arc.clone());
+        let renderer = MarkdownRenderer::new(doc_arc.clone(), vec![].into());
 
         assert_eq!(
             vec![

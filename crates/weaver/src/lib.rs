@@ -1,8 +1,10 @@
 use document::Document;
 use futures::future::join_all;
 use glob::glob;
-use renderers::{MarkdownRenderer, TemplateRenderer};
+use liquid::model::KString;
+use renderers::{MarkdownRenderer, globals::LiquidGlobals};
 use std::{
+    collections::HashMap,
     error::Error,
     fmt::Display,
     path::{Path, PathBuf},
@@ -34,76 +36,6 @@ impl Display for BuildError {
         match self {
             BuildError::Err(err) => write!(f, "{}", err),
         }
-    }
-}
-
-// Define a struct to hold the data needed for rendering templates
-// These will be Arc'd to be shared across tasks
-#[derive(Clone)] // Derive Clone to easily pass it into async move blocks
-pub struct RenderContext {
-    pub config: Arc<WeaverConfig>,
-    pub documents: Arc<Vec<Arc<Mutex<Document>>>>,
-    pub templates: Arc<Vec<Arc<Mutex<Template>>>>,
-    pub tags: Vec<String>,
-    pub routes: Vec<String>,
-}
-
-impl RenderContext {
-    pub async fn to_liquid_data(&self) -> liquid::Object {
-        // 1. Config
-        let mut liquid_object = liquid::object!({
-            "config": *self.config.clone(),
-        });
-
-        // 2. Documents
-        let document_futures: Vec<_> = self
-            .documents
-            .iter()
-            .map(|doc_arc| {
-                let doc_arc_clone = Arc::clone(doc_arc);
-                async move {
-                    let doc_guard = doc_arc_clone.lock().await;
-                    liquid::model::to_value(&*doc_guard).expect("Failed to serialize document")
-                }
-            })
-            .collect();
-        let liquid_documents: Vec<liquid::model::Value> = join_all(document_futures).await;
-        liquid_object.insert(
-            "documents".into(),
-            liquid::model::Value::array(liquid_documents),
-        );
-
-        // 3. Templates (assuming Template or TemplateRenderer can be serialized)
-        let template_futures: Vec<_> = self
-            .templates
-            .iter()
-            .map(|tmpl_arc| {
-                let tmpl_arc_clone = Arc::clone(tmpl_arc);
-                async move {
-                    let tmpl_guard = tmpl_arc_clone.lock().await;
-                    liquid::model::to_value(&*tmpl_guard).expect("Failed to serialize template")
-                }
-            })
-            .collect();
-        let liquid_templates: Vec<liquid::model::Value> = join_all(template_futures).await;
-        liquid_object.insert(
-            "templates".into(),
-            liquid::model::Value::array(liquid_templates),
-        );
-
-        // 4. Tags (Vec<String> converts easily)
-        liquid_object.insert(
-            "tags".into(),
-            liquid::model::to_value(&self.tags).expect("Failed to serialize tags"),
-        );
-
-        // 5. Routes (Vec<String> converts easily)
-        liquid_object.insert(
-            "routes".into(),
-            liquid::model::to_value(&self.routes).expect("Failed to serialize routes"),
-        );
-
-        liquid_object
     }
 }
 
@@ -149,7 +81,7 @@ impl Weaver {
         let mut route_parts: Vec<String> = relative_path
             .components()
             .filter_map(|c| {
-                // Filter out '.' and '..' components, and root/prefix components
+                // Filter out relative path components, and root/prefix components
                 match c {
                     std::path::Component::Normal(os_str) => {
                         Some(os_str.to_string_lossy().into_owned())
@@ -237,51 +169,41 @@ impl Weaver {
         self
     }
 
+    async fn map_from_documents(
+        &self,
+    ) -> HashMap<KString, Arc<tokio::sync::Mutex<crate::Document>>> {
+        let mut map = HashMap::new();
+
+        for document in self.documents.iter() {
+            let doc_guard = document.lock().await;
+            map.insert(
+                KString::from(self.route_from_path(doc_guard.at_path.clone().into())),
+                document.clone(),
+            );
+        }
+
+        map
+    }
+
     pub async fn build(&self) -> Result<(), BuildError> {
         dbg!("Starting build process");
 
-        // --- Prepare shared data wrapped in Arc ---
-        let config_arc = Arc::clone(&self.config);
-        let documents_arc = Arc::new(self.documents.clone());
         let templates_arc = Arc::new(self.templates.clone());
-        let tags_vec = self.tags.clone();
-        let routes_vec = self.routes.clone();
-
-        // Create the RenderContext template
-        let render_context_template = RenderContext {
-            config: Arc::clone(&config_arc), // Clone Arcs for the context template
-            documents: Arc::clone(&documents_arc),
-            templates: Arc::clone(&templates_arc),
-            routes: routes_vec,
-            tags: tags_vec,
-        };
-        let task_context = Arc::new(render_context_template.to_liquid_data().await);
-        // --- End Prepare shared data ---
 
         // Create a vector to hold our futures
         let mut tasks = vec![];
 
         // Spawn tasks for building documents
         for document in &self.documents {
-            let document_arc = Arc::clone(document); // Clone the Arc for this specific document
-            let context = Arc::clone(&task_context);
+            let document_arc = Arc::clone(document);
+            let templates = Arc::clone(&templates_arc);
+            let mut globals =
+                LiquidGlobals::new(document_arc.clone(), &self.map_from_documents().await).await;
             let doc_task = tokio::spawn(async move {
-                let md_renderer = MarkdownRenderer::new(document_arc);
-                md_renderer.render(&context).await
+                let md_renderer = MarkdownRenderer::new(document_arc, templates);
+                md_renderer.render(&mut globals).await
             });
             tasks.push(doc_task);
-        }
-
-        // Spawn tasks for parsing templates
-        for template in &self.templates {
-            let template_arc = Arc::clone(template); // Clone the Arc for this specific template
-            let context = Arc::clone(&task_context);
-            let template_task = tokio::spawn(async move {
-                let renderer = TemplateRenderer::new(template_arc);
-
-                renderer.render(&context).await
-            });
-            tasks.push(template_task);
         }
 
         // Wait for all tasks to complete and collect their results
