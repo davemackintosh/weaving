@@ -174,13 +174,7 @@ mod test {
 
     #[tokio::test]
     async fn test_liquid() {
-        let base_path_wd = std::env::current_dir()
-            .unwrap()
-            .as_os_str()
-            .to_os_string()
-            .to_str()
-            .unwrap()
-            .to_string();
+        let base_path_wd = std::env::current_dir().unwrap().display().to_string();
         let base_path = format!("{}/test_fixtures/liquid", base_path_wd);
         let template = Template::new_from_path(format!("{}/template.liquid", base_path).into());
         let renderer = TemplateRenderer::new(Arc::new(Mutex::new(template)));
@@ -205,13 +199,7 @@ mod test {
 
     #[test]
     fn test_markdown_toc_generation() {
-        let base_path_wd = std::env::current_dir()
-            .unwrap()
-            .as_os_str()
-            .to_os_string()
-            .to_str()
-            .unwrap()
-            .to_string();
+        let base_path_wd = std::env::current_dir().unwrap().display().to_string();
         let base_path = format!("{}/test_fixtures/markdown", base_path_wd);
         let doc_arc = Arc::new(Mutex::new(Document::new_from_path(
             format!("{}/with_headings.md", base_path).into(),

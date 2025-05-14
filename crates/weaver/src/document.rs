@@ -30,7 +30,7 @@ pub struct BaseMetaData {
     pub template: String,
 
     #[serde(flatten)]
-    user: HashMap<String, Value>,
+    pub user: HashMap<String, Value>,
 }
 
 impl Default for BaseMetaData {
