@@ -1,6 +1,9 @@
 pub mod globals;
+use async_trait::async_trait;
 use futures::StreamExt;
+use futures::lock::MutexGuard;
 use globals::LiquidGlobals;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use markdown::{ParseOptions, mdast::Node};
@@ -11,6 +14,17 @@ use crate::document::Heading;
 use crate::filters::raw_html::RawHtml;
 use crate::{BuildError, document::Document};
 
+#[derive(Debug)]
+pub struct WritableFile {
+    pub contents: String,
+    pub path: PathBuf,
+}
+
+#[async_trait]
+pub trait ContentRenderer {
+    async fn render(&self, data: &mut LiquidGlobals) -> Result<WritableFile, BuildError>;
+}
+
 pub enum TemplateRenderer {
     LiquidBuilder {
         liquid_parser: liquid::Parser,
@@ -18,18 +32,9 @@ pub enum TemplateRenderer {
     },
 }
 
-impl TemplateRenderer {
-    pub fn new(template: Arc<Mutex<crate::Template>>) -> Self {
-        Self::LiquidBuilder {
-            liquid_parser: liquid::ParserBuilder::with_stdlib()
-                .filter(RawHtml)
-                .build()
-                .unwrap(),
-            weaver_template: template.clone(),
-        }
-    }
-
-    pub async fn render(&self, data: &LiquidGlobals) -> Result<String, BuildError> {
+#[async_trait]
+impl ContentRenderer for TemplateRenderer {
+    async fn render(&self, data: &mut LiquidGlobals) -> Result<WritableFile, BuildError> {
         match self {
             Self::LiquidBuilder {
                 liquid_parser,
@@ -50,9 +55,45 @@ impl TemplateRenderer {
     }
 }
 
+impl TemplateRenderer {
+    pub fn new(
+        template: Arc<Mutex<crate::Template>>,
+        for_document: MutexGuard<crate::Document>,
+    ) -> Self {
+        Self::LiquidBuilder {
+            liquid_parser: liquid::ParserBuilder::with_stdlib()
+                .filter(RawHtml)
+                .build()
+                .unwrap(),
+            weaver_template: template.clone(),
+        }
+    }
+}
+
 pub struct MarkdownRenderer {
     document: Arc<Mutex<Document>>,
     templates: Arc<Vec<Arc<Mutex<crate::Template>>>>,
+}
+
+#[async_trait]
+impl ContentRenderer for MarkdownRenderer {
+    async fn render(&self, data: &mut LiquidGlobals) -> Result<WritableFile, BuildError> {
+        let mut doc_guard = self.document.lock().await;
+        let template = self
+            .find_template_by_string(doc_guard.metadata.template.clone())
+            .await
+            .unwrap();
+
+        doc_guard.toc = self.toc_from_document(&doc_guard);
+
+        let markdown_html =
+            markdown::to_html_with_options(doc_guard.markdown.as_str(), &markdown::Options::gfm())
+                .expect("failed to render markdown to html");
+        let template_renderer = TemplateRenderer::new(template.clone());
+        data.page.body = markdown_html;
+
+        template_renderer.render(&data.to_owned()).await
+    }
 }
 
 impl MarkdownRenderer {
@@ -145,24 +186,6 @@ impl MarkdownRenderer {
             })
             .next()
             .await
-    }
-
-    pub async fn render(&self, data: &mut LiquidGlobals) -> Result<String, BuildError> {
-        let mut doc_guard = self.document.lock().await;
-        let template = self
-            .find_template_by_string(doc_guard.metadata.template.clone())
-            .await
-            .unwrap();
-
-        doc_guard.toc = self.toc_from_document(&doc_guard);
-
-        let markdown_html =
-            markdown::to_html_with_options(doc_guard.markdown.as_str(), &markdown::Options::gfm())
-                .expect("failed to render markdown to html");
-        let template_renderer = TemplateRenderer::new(template.clone());
-        data.page.body = markdown_html;
-
-        template_renderer.render(&data.to_owned()).await
     }
 }
 

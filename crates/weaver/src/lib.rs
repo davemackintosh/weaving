@@ -2,11 +2,13 @@ use document::Document;
 use futures::future::join_all;
 use glob::glob;
 use liquid::model::KString;
-use renderers::{MarkdownRenderer, globals::LiquidGlobals};
+use renderers::{ContentRenderer, MarkdownRenderer, WritableFile, globals::LiquidGlobals};
 use std::{
     collections::HashMap,
     error::Error,
     fmt::Display,
+    fs::File,
+    io::prelude::*,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -186,15 +188,19 @@ impl Weaver {
         map
     }
 
+    async fn write_result_to_system(&self, target: WritableFile) -> Result<(), BuildError> {
+        let mut file = File::create(target.path).unwrap();
+        file.write_all(target.contents.as_bytes()).unwrap();
+
+        Ok(())
+    }
+
     pub async fn build(&self) -> Result<(), BuildError> {
         dbg!("Starting build process");
 
         let templates_arc = Arc::new(self.templates.clone());
-
-        // Create a vector to hold our futures
         let mut tasks = vec![];
 
-        // Spawn tasks for building documents
         for document in &self.documents {
             let document_arc = Arc::clone(document);
             let templates = Arc::clone(&templates_arc);
@@ -209,7 +215,7 @@ impl Weaver {
 
         // Wait for all tasks to complete and collect their results
         // The outer Result is JoinError, the inner Result is from your async function
-        let results: Vec<Result<Result<String, BuildError>, tokio::task::JoinError>> =
+        let results: Vec<Result<Result<WritableFile, BuildError>, tokio::task::JoinError>> =
             join_all(tasks).await;
 
         // Check for errors in the results
@@ -222,6 +228,10 @@ impl Weaver {
                         // return the first error or collect all errors.
                         return Err(e);
                     }
+
+                    // TODO: Cache output file paths and remove files that aren't part of the
+                    // output.
+                    self.write_file_to_path(inner_result.unwrap());
                 }
                 Err(e) => {
                     eprintln!("Task join error: {}", e);
