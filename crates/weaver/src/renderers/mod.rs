@@ -25,30 +25,30 @@ pub trait ContentRenderer {
     async fn render(&self, data: &mut LiquidGlobals) -> Result<WritableFile, BuildError>;
 }
 
-async fn out_path_for_document(
-    document: &Arc<Mutex<Document>>,
+fn out_path_for_document(
+    document: &Document,
     weaver_config: &Arc<crate::WeaverConfig>,
 ) -> PathBuf {
     let out_base = weaver_config.build_dir.clone();
     let document_content_path = route_from_path(
         weaver_config.content_dir.clone().into(),
-        document.lock().await.at_path.clone().into(),
+        document.at_path.clone().into(),
     );
 
     format!("{}{}index.html", out_base, document_content_path).into()
 }
 
-pub enum TemplateRenderer {
+pub enum TemplateRenderer<'a> {
     LiquidBuilder {
         liquid_parser: liquid::Parser,
-        for_document: Arc<Mutex<Document>>,
+        for_document: &'a Document,
         weaver_template: Arc<Mutex<crate::Template>>,
         weaver_config: Arc<crate::WeaverConfig>,
     },
 }
 
 #[async_trait]
-impl ContentRenderer for TemplateRenderer {
+impl<'a> ContentRenderer for TemplateRenderer<'a> {
     async fn render(&self, data: &mut LiquidGlobals) -> Result<WritableFile, BuildError> {
         match self {
             Self::LiquidBuilder {
@@ -66,7 +66,7 @@ impl ContentRenderer for TemplateRenderer {
                 {
                     Ok(result) => Ok(WritableFile {
                         contents: result,
-                        path: out_path_for_document(for_document, weaver_config).await,
+                        path: out_path_for_document(&for_document, weaver_config)
                     }),
                     Err(err) => Err(BuildError::Err(err.to_string())),
                 }
@@ -75,10 +75,10 @@ impl ContentRenderer for TemplateRenderer {
     }
 }
 
-impl TemplateRenderer {
+impl<'a> TemplateRenderer<'a> {
     pub fn new(
         template: Arc<Mutex<crate::Template>>,
-        for_document: Arc<Mutex<Document>>,
+        for_document: &'a Document,
         weaver_config: Arc<crate::WeaverConfig>,
     ) -> Self {
         Self::LiquidBuilder {
@@ -115,7 +115,7 @@ impl ContentRenderer for MarkdownRenderer {
                 .expect("failed to render markdown to html");
         let template_renderer = TemplateRenderer::new(
             template.clone(),
-            self.document.clone(),
+            &doc_guard,
             self.weaver_config.clone(),
         );
         data.page.body = markdown_html;
@@ -234,17 +234,19 @@ mod test {
         let base_path_wd = std::env::current_dir().unwrap().display().to_string();
         let base_path = format!("{}/test_fixtures/example", base_path_wd);
         let template = Template::new_from_path(format!("{}/test_fixtures/liquid/template.liquid", base_path_wd).into());
-        let doc_arc = Arc::new(Mutex::new(Document::new_from_path(
+        let doc_arc = Document::new_from_path(
             format!("{}/content/with_headings.md", base_path).into(),
-        )));
+        );
         let config = Arc::new(WeaverConfig::new_from_path(base_path.clone()));
         let renderer = TemplateRenderer::new(
             Arc::new(Mutex::new(template)),
-            doc_arc.clone(),
+            &doc_arc,
             config.clone(),
         );
 
-        let mut data = LiquidGlobals::new(doc_arc, &HashMap::new()).await;
+        let mut data = LiquidGlobals::new(Arc::new(Mutex::new(Document::new_from_path(
+            format!("{}/content/with_headings.md", base_path).into(),
+        ))), &HashMap::new()).await;
 
         assert_eq!(
             WritableFile {
@@ -327,6 +329,7 @@ mod test {
         );
 
         let mut data = LiquidGlobals::new(doc_arc, &HashMap::new()).await;
+        let result = renderer.render(&mut data).await;
 
         assert_eq!(
             WritableFile {
@@ -363,7 +366,7 @@ mod test {
                 .into(),
                 path: format!("{}/site/with_headings/index.html", base_path).into()
             },
-            renderer.render(&mut data).await.unwrap()
+            result.unwrap()
         );
     }
 }
