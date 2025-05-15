@@ -936,7 +936,6 @@ dependencies = [
  "markdown",
  "pretty_assertions",
  "serde",
- "serde_json",
  "slug",
  "tokio",
  "toml 0.8.22",
@@ -945,9 +944,6 @@ dependencies = [
 [[package]]
 name = "weaving"
 version = "0.1.0"
-dependencies = [
- "toml 0.8.22",
-]
 
 [[package]]
 name = "windows-targets"

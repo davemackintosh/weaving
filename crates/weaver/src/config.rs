@@ -9,6 +9,18 @@ pub enum TemplateLang {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
+pub struct ImageConfig {
+    pub quality: u8,
+}
+
+impl Default for ImageConfig {
+    fn default() -> Self {
+        Self { quality: 83 }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(default)]
 pub struct WeaverConfig {
     pub version: String,
     pub base_dir: String,
@@ -19,6 +31,7 @@ pub struct WeaverConfig {
     pub template_dir: String,
     pub build_dir: String,
     pub templating_language: TemplateLang,
+    pub image_config: ImageConfig,
 }
 
 impl Default for WeaverConfig {
@@ -39,6 +52,7 @@ impl Default for WeaverConfig {
             build_dir: "site".into(),
             template_dir: "templates".into(),
             templating_language: TemplateLang::Liquid,
+            image_config: Default::default(),
         }
     }
 }
@@ -65,6 +79,7 @@ impl WeaverConfig {
                 public_dir: format!("{}/{}", &inst.base_dir, inst.public_dir),
                 build_dir: format!("{}/{}", &inst.base_dir, inst.build_dir),
                 templating_language: TemplateLang::Liquid,
+                image_config: inst.image_config,
             };
         } else {
             dbg!(format!(
@@ -105,6 +120,7 @@ impl WeaverConfig {
                 &user_supplied_config.base_dir, user_supplied_config.template_dir
             ),
             templating_language: user_supplied_config.templating_language,
+            image_config: user_supplied_config.image_config,
         }
     }
 
@@ -136,6 +152,7 @@ impl WeaverConfig {
             build_dir: format!("{}/{}", &safe_path, user_supplied_config.build_dir),
             template_dir: format!("{}/{}", &safe_path, user_supplied_config.template_dir),
             templating_language: user_supplied_config.templating_language,
+            image_config: user_supplied_config.image_config,
         }
     }
 }
@@ -186,13 +203,7 @@ mod test {
 
     #[test]
     fn test_with_filled_config_file() {
-        let base_path_wd = std::env::current_dir()
-            .unwrap()
-            .as_os_str()
-            .to_os_string()
-            .to_str()
-            .unwrap()
-            .to_string();
+        let base_path_wd = std::env::current_dir().unwrap().display().to_string();
         let base_path = format!("{}/test_fixtures/config/custom_config", base_path_wd);
         let config = WeaverConfig::new_from_path(base_path.clone());
 
@@ -206,13 +217,7 @@ mod test {
 
     #[test]
     fn test_with_partial_config_file() {
-        let base_path_wd = std::env::current_dir()
-            .unwrap()
-            .as_os_str()
-            .to_os_string()
-            .to_str()
-            .unwrap()
-            .to_string();
+        let base_path_wd = std::env::current_dir().unwrap().display().to_string();
         let base_path = format!("{}/test_fixtures/config/partial_config", base_path_wd);
         let config = WeaverConfig::new_from_path(base_path.clone());
 

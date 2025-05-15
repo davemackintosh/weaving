@@ -16,6 +16,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: Dependencies
+      run: sudo apt install -y nasm yasm
     - name: Build
       run: cargo build --verbose
     - name: Run tests
