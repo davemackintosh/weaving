@@ -63,7 +63,7 @@ impl<'a> ContentRenderer for TemplateRenderer<'a> {
                 {
                     Ok(result) => Ok(WritableFile {
                         contents: result,
-                        path: out_path_for_document(&for_document, weaver_config),
+                        path: out_path_for_document(for_document, weaver_config),
                     }),
                     Err(err) => Err(BuildError::Err(err.to_string())),
                 }
@@ -104,6 +104,12 @@ impl ContentRenderer for MarkdownRenderer {
             .find_template_by_string(doc_guard.metadata.template.clone())
             .await
             .unwrap();
+
+        dbg!(
+            "rendering markdown with template {}, {}",
+            &doc_guard.at_path,
+            &template
+        );
 
         doc_guard.toc = self.toc_from_document(&doc_guard);
 

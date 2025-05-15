@@ -60,6 +60,10 @@ impl Weaver {
         for entry in glob(format!("{}/**/*.md", self.config.content_dir).as_str())
             .expect("Failed to read glob pattern")
         {
+            dbg!(
+                "Found document: {}",
+                entry.as_ref().unwrap().to_string_lossy()
+            );
             match entry {
                 Ok(path) => {
                     let mut doc = Document::new_from_path(path.clone());
@@ -85,6 +89,10 @@ impl Weaver {
         for entry in glob(format!("{}/**/*{}", self.config.content_dir, extension).as_str())
             .expect("Failed to read glob pattern")
         {
+            dbg!(
+                "Found template: {}",
+                entry.as_ref().unwrap().to_string_lossy()
+            );
             match entry {
                 Ok(pathbuf) => self
                     .templates
@@ -125,21 +133,26 @@ impl Weaver {
         dbg!("Starting build process");
 
         let templates_arc = Arc::new(self.templates.clone());
+        let document_map = Arc::new(self.map_from_documents().await);
         let mut tasks = vec![];
 
         for document in &self.documents {
             let document_arc = Arc::clone(document);
+            dbg!("Processing document {}", document_arc.as_ref());
             let templates = Arc::clone(&templates_arc);
             let config = Arc::clone(&self.config);
-            let mut globals =
-                LiquidGlobals::new(document_arc.clone(), &self.map_from_documents().await).await;
+            let map = Arc::clone(&document_map.clone());
+
             let doc_task = tokio::spawn(async move {
+                let mut globals = LiquidGlobals::new(document_arc.clone(), &map).await;
+                dbg!("DEBUGGING");
                 let md_renderer = MarkdownRenderer::new(document_arc, templates, config);
                 md_renderer.render(&mut globals).await
             });
             tasks.push(doc_task);
         }
 
+        dbg!("tasks queued");
         // Wait for all tasks to complete and collect their results
         // The outer Result is JoinError, the inner Result is from your async function
         let results: Vec<Result<Result<WritableFile, BuildError>, tokio::task::JoinError>> =
