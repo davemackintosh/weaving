@@ -80,7 +80,7 @@ mod test {
     fn test_route_from_path() {
         let base_path_wd = std::env::current_dir().unwrap().display().to_string();
         let base_path = format!("{}/test_fixtures/config", base_path_wd);
-        let inst = Weaver::new(format!("{}/custom_config", base_path));
+        let inst = Weaver::new(format!("{}/custom_config", base_path).into());
 
         assert_eq!(
             "/blog/post1/",
@@ -96,7 +96,7 @@ mod test {
     fn test_content_out_of_path() {
         let base_path_wd = std::env::current_dir().unwrap().display().to_string();
         let base_path = format!("{}/test_fixtures/config", base_path_wd);
-        let inst = Weaver::new(format!("{}/custom_config", base_path));
+        let inst = Weaver::new(format!("{}/custom_config", base_path).into());
         route_from_path(
             inst.config.content_dir.clone().into(),
             "madeup/blog/post1.md".into(),

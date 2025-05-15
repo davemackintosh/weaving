@@ -2,9 +2,9 @@ use document::Document;
 use futures::future::join_all;
 use glob::glob;
 use liquid::model::KString;
-use renderers::{globals::LiquidGlobals, ContentRenderer, MarkdownRenderer, WritableFile};
+use renderers::{ContentRenderer, MarkdownRenderer, WritableFile, globals::LiquidGlobals};
 use routes::route_from_path;
-use std::{collections::HashMap, error::Error, fmt::Display, io::prelude::*, sync::Arc};
+use std::{collections::HashMap, error::Error, fmt::Display, path::PathBuf, sync::Arc};
 use template::Template;
 use tokio::sync::Mutex;
 
@@ -45,7 +45,7 @@ pub struct Weaver {
 }
 
 impl Weaver {
-    pub fn new(base_path: String) -> Self {
+    pub fn new(base_path: PathBuf) -> Self {
         Self {
             config: Arc::new(WeaverConfig::new_from_path(base_path)),
             tags: vec![],

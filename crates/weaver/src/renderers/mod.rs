@@ -25,10 +25,7 @@ pub trait ContentRenderer {
     async fn render(&self, data: &mut LiquidGlobals) -> Result<WritableFile, BuildError>;
 }
 
-fn out_path_for_document(
-    document: &Document,
-    weaver_config: &Arc<crate::WeaverConfig>,
-) -> PathBuf {
+fn out_path_for_document(document: &Document, weaver_config: &Arc<crate::WeaverConfig>) -> PathBuf {
     let out_base = weaver_config.build_dir.clone();
     let document_content_path = route_from_path(
         weaver_config.content_dir.clone().into(),
@@ -66,7 +63,7 @@ impl<'a> ContentRenderer for TemplateRenderer<'a> {
                 {
                     Ok(result) => Ok(WritableFile {
                         contents: result,
-                        path: out_path_for_document(&for_document, weaver_config)
+                        path: out_path_for_document(&for_document, weaver_config),
                     }),
                     Err(err) => Err(BuildError::Err(err.to_string())),
                 }
@@ -113,11 +110,8 @@ impl ContentRenderer for MarkdownRenderer {
         let markdown_html =
             markdown::to_html_with_options(doc_guard.markdown.as_str(), &markdown::Options::gfm())
                 .expect("failed to render markdown to html");
-        let template_renderer = TemplateRenderer::new(
-            template.clone(),
-            &doc_guard,
-            self.weaver_config.clone(),
-        );
+        let template_renderer =
+            TemplateRenderer::new(template.clone(), &doc_guard, self.weaver_config.clone());
         data.page.body = markdown_html;
 
         template_renderer.render(&mut data.to_owned()).await
@@ -233,20 +227,22 @@ mod test {
     async fn test_liquid() {
         let base_path_wd = std::env::current_dir().unwrap().display().to_string();
         let base_path = format!("{}/test_fixtures/example", base_path_wd);
-        let template = Template::new_from_path(format!("{}/test_fixtures/liquid/template.liquid", base_path_wd).into());
-        let doc_arc = Document::new_from_path(
-            format!("{}/content/with_headings.md", base_path).into(),
+        let template = Template::new_from_path(
+            format!("{}/test_fixtures/liquid/template.liquid", base_path_wd).into(),
         );
-        let config = Arc::new(WeaverConfig::new_from_path(base_path.clone()));
-        let renderer = TemplateRenderer::new(
-            Arc::new(Mutex::new(template)),
-            &doc_arc,
-            config.clone(),
-        );
+        let doc_arc =
+            Document::new_from_path(format!("{}/content/with_headings.md", base_path).into());
+        let config = Arc::new(WeaverConfig::new_from_path(base_path.clone().into()));
+        let renderer =
+            TemplateRenderer::new(Arc::new(Mutex::new(template)), &doc_arc, config.clone());
 
-        let mut data = LiquidGlobals::new(Arc::new(Mutex::new(Document::new_from_path(
-            format!("{}/content/with_headings.md", base_path).into(),
-        ))), &HashMap::new()).await;
+        let mut data = LiquidGlobals::new(
+            Arc::new(Mutex::new(Document::new_from_path(
+                format!("{}/content/with_headings.md", base_path).into(),
+            ))),
+            &HashMap::new(),
+        )
+        .await;
 
         assert_eq!(
             WritableFile {
@@ -273,7 +269,7 @@ mod test {
             format!("{}/with_headings.md", base_path).into(),
         )));
         let config_path = format!("{}/test_fixtures/config/custom_config", base_path_wd);
-        let config = Arc::new(WeaverConfig::new_from_path(config_path.clone()));
+        let config = Arc::new(WeaverConfig::new_from_path(config_path.clone().into()));
         let renderer = MarkdownRenderer::new(doc_arc.clone(), vec![].into(), config.clone());
 
         assert_eq!(
@@ -319,13 +315,16 @@ mod test {
     async fn test_render() {
         let base_path_wd = std::env::current_dir().unwrap().display().to_string();
         let base_path = format!("{}/test_fixtures/example", base_path_wd);
-        let template = Template::new_from_path(format!("{}/templates/default.liquid", base_path).into());
+        let template =
+            Template::new_from_path(format!("{}/templates/default.liquid", base_path).into());
         let doc_arc = Arc::new(Mutex::new(Document::new_from_path(
             format!("{}/content/with_headings.md", base_path).into(),
         )));
-        let config = Arc::new(WeaverConfig::new_from_path(base_path.clone()));
+        let config = Arc::new(WeaverConfig::new_from_path(base_path.clone().into()));
         let renderer = MarkdownRenderer::new(
-            doc_arc.clone(), vec![Arc::new(Mutex::new(template))].into(), config.clone()
+            doc_arc.clone(),
+            vec![Arc::new(Mutex::new(template))].into(),
+            config.clone(),
         );
 
         let mut data = LiquidGlobals::new(doc_arc, &HashMap::new()).await;

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -124,13 +126,14 @@ impl WeaverConfig {
         }
     }
 
-    pub fn new_from_path(base_path: String) -> Self {
+    pub fn new_from_path(base_path: PathBuf) -> Self {
         // Remove any trailing slash.
-        let safe_path = base_path.trim_end_matches('/').to_string();
+        let safe_path = base_path.to_str().unwrap();
         let config_file_result = std::fs::read_to_string(format!("{}/weaving.toml", safe_path));
 
         if config_file_result.is_err() {
-            panic!("Didn't find a weaving.toml at '{}'", &safe_path);
+            dbg!(format!("Didn't find a weaving.toml at '{}'", &safe_path));
+            return Self::new();
         } else {
             dbg!(format!("Found config file at '{}/weaving.toml'", safe_path));
         }
@@ -144,7 +147,7 @@ impl WeaverConfig {
 
         Self {
             version: user_supplied_config.version,
-            base_dir: safe_path.clone(),
+            base_dir: safe_path.to_string(),
             content_dir: format!("{}/{}", &safe_path, user_supplied_config.content_dir),
             base_url: user_supplied_config.base_url,
             includes_dir: format!("{}/{}", &safe_path, user_supplied_config.includes_dir),
@@ -191,7 +194,7 @@ mod test {
             .unwrap()
             .to_string();
         let base_path = format!("{}/test_fixtures/config/empty_config", base_path_wd);
-        let config = WeaverConfig::new_from_path(base_path.clone());
+        let config = WeaverConfig::new_from_path(base_path.clone().into());
 
         assert_eq!(config.base_dir, base_path);
         assert_eq!(config.content_dir, format!("{}/content", base_path));
@@ -205,7 +208,7 @@ mod test {
     fn test_with_filled_config_file() {
         let base_path_wd = std::env::current_dir().unwrap().display().to_string();
         let base_path = format!("{}/test_fixtures/config/custom_config", base_path_wd);
-        let config = WeaverConfig::new_from_path(base_path.clone());
+        let config = WeaverConfig::new_from_path(base_path.clone().into());
 
         assert_eq!(config.base_dir, base_path);
         assert_eq!(config.content_dir, format!("{}/content", base_path));
@@ -219,7 +222,7 @@ mod test {
     fn test_with_partial_config_file() {
         let base_path_wd = std::env::current_dir().unwrap().display().to_string();
         let base_path = format!("{}/test_fixtures/config/partial_config", base_path_wd);
-        let config = WeaverConfig::new_from_path(base_path.clone());
+        let config = WeaverConfig::new_from_path(base_path.clone().into());
 
         assert_eq!(config.base_dir, base_path);
         assert_eq!(config.content_dir, format!("{}/content", base_path));
