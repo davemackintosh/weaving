@@ -35,7 +35,7 @@ async fn out_path_for_document(
         document.lock().await.at_path.clone().into(),
     );
 
-    format!("{}{}/index.html", out_base, document_content_path).into()
+    format!("{}{}index.html", out_base, document_content_path).into()
 }
 
 pub enum TemplateRenderer {
@@ -316,18 +316,16 @@ mod test {
     #[tokio::test]
     async fn test_render() {
         let base_path_wd = std::env::current_dir().unwrap().display().to_string();
-        let liquid_base_path = format!("{}/test_fixtures/liquid", base_path_wd);
-        let md_base_path = format!("{}/test_fixtures/markdown", base_path_wd);
+        let base_path = format!("{}/test_fixtures/example", base_path_wd);
+        let template = Template::new_from_path(format!("{}/templates/default.liquid", base_path).into());
         let doc_arc = Arc::new(Mutex::new(Document::new_from_path(
-            format!("{}/with_headings.md", md_base_path).into(),
+            format!("{}/content/with_headings.md", base_path).into(),
         )));
-        let template_arc = Arc::new(Mutex::new(Template::new_from_path(
-            format!("{}/default.liquid", liquid_base_path).into(),
-        )));
-        let config_path = format!("{}/test_fixtures/config/custom_config", base_path_wd);
-        let config = Arc::new(WeaverConfig::new_from_path(config_path.clone()));
-        let renderer =
-            MarkdownRenderer::new(doc_arc.clone(), vec![template_arc].into(), config.clone());
+        let config = Arc::new(WeaverConfig::new_from_path(base_path.clone()));
+        let renderer = MarkdownRenderer::new(
+            doc_arc.clone(), vec![Arc::new(Mutex::new(template))].into(), config.clone()
+        );
+
         let mut data = LiquidGlobals::new(doc_arc, &HashMap::new()).await;
 
         assert_eq!(
@@ -363,7 +361,7 @@ mod test {
 
 "#
                 .into(),
-                path: "".into()
+                path: format!("{}/site/with_headings/index.html", base_path).into()
             },
             renderer.render(&mut data).await.unwrap()
         );

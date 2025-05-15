@@ -2,9 +2,9 @@ use document::Document;
 use futures::future::join_all;
 use glob::glob;
 use liquid::model::KString;
-use renderers::{ContentRenderer, MarkdownRenderer, WritableFile, globals::LiquidGlobals};
+use renderers::{globals::LiquidGlobals, ContentRenderer, MarkdownRenderer, WritableFile};
 use routes::route_from_path;
-use std::{collections::HashMap, error::Error, fmt::Display, fs::File, io::prelude::*, sync::Arc};
+use std::{collections::HashMap, error::Error, fmt::Display, io::prelude::*, sync::Arc};
 use template::Template;
 use tokio::sync::Mutex;
 
@@ -96,9 +96,7 @@ impl Weaver {
         self
     }
 
-    async fn map_from_documents(
-        &self,
-    ) -> HashMap<KString, Arc<Mutex<Document>>> {
+    async fn map_from_documents(&self) -> HashMap<KString, Arc<Mutex<Document>>> {
         let mut map = HashMap::new();
 
         for document in self.documents.iter() {
@@ -116,8 +114,9 @@ impl Weaver {
     }
 
     async fn write_result_to_system(&self, target: WritableFile) -> Result<(), BuildError> {
-        let mut file = File::create(target.path).unwrap();
-        file.write_all(target.contents.as_bytes()).unwrap();
+        println!("Writing file {:#?}", target);
+        //let mut file = File::create(target.path).unwrap();
+        //file.write_all(target.contents.as_bytes()).unwrap();
 
         Ok(())
     }
@@ -159,8 +158,7 @@ impl Weaver {
 
                     // TODO: Cache output file paths and remove files that aren't part of the
                     // output.
-                    self.write_result_to_system(inner_result?)
-                        .await?;
+                    self.write_result_to_system(inner_result?).await?;
                 }
                 Err(e) => {
                     eprintln!("Task join error: {}", e);
