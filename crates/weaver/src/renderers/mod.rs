@@ -2,6 +2,7 @@ pub mod globals;
 use async_trait::async_trait;
 use futures::StreamExt;
 use globals::LiquidGlobals;
+use markdown::CompileOptions;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -113,9 +114,17 @@ impl ContentRenderer for MarkdownRenderer {
 
         doc_guard.toc = self.toc_from_document(&doc_guard);
 
-        let markdown_html =
-            markdown::to_html_with_options(doc_guard.markdown.as_str(), &markdown::Options::gfm())
-                .expect("failed to render markdown to html");
+        let markdown_html = markdown::to_html_with_options(
+            doc_guard.markdown.as_str(),
+            &markdown::Options {
+                compile: CompileOptions {
+                    allow_dangerous_html: true,
+                    ..CompileOptions::gfm()
+                },
+                ..markdown::Options::gfm()
+            },
+        )
+        .expect("failed to render markdown to html");
         let template_renderer =
             TemplateRenderer::new(template.clone(), &doc_guard, self.weaver_config.clone());
         data.page.body = markdown_html;
