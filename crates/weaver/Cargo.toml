@@ -2,6 +2,11 @@
 name = "weaver"
 version = "0.1.0"
 edition = "2024"
+license-file = "../../LICENSE"
+keywords = ["static", "site", "generator", "library", "no-config"]
+categories = ["static-site-generation", "blog-framework"]
+exclude = ["./test_fixtures"]
+repository = "https://github.com/davemackintosh/weaving/"
 
 [dependencies]
 toml = "0.8.22"
