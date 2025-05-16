@@ -20,11 +20,11 @@ Well, frankly? This is for my blog and some passion projects. If other people li
 
 Currently, installation is done by building it yourself but I will get around to packaging it and distributing via binstall, etc.
 
-Clone this repo and then run `cargo build --release` and you'll get yourself a `weaving` binary in `target/release/weaving` which you can move to somewhere on your `PATH`.
+Clone this repo and then run `cargo install --path ./crates/weaving` and you'll get yourself a `weaving` command.
 
 ### Usage
 
-`weaving build -c .`
+If you're in a suitable folder, you can run `weaving build`
 
 Where you run that you should have the following folder structure
 
@@ -34,6 +34,10 @@ Where you run that you should have the following folder structure
   ./templates <-- this is where your liquid templates go.
     default.liquid <-- this is required if any of your content doesn't specify a template in it's frontmatter.
 ```
+
+### Building a site
+
+When you're developing a site, it's useful to see it in your browser easily. You can run `weaving serve` to create a simple web server.
 
 Content must have at least these fields in it's frontmatter
 
