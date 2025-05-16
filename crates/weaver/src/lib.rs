@@ -2,7 +2,10 @@ use document::Document;
 use futures::future::join_all;
 use glob::glob;
 use liquid::model::KString;
-use renderers::{ContentRenderer, MarkdownRenderer, WritableFile, globals::LiquidGlobals};
+use renderers::{
+    ContentRenderer, MarkdownRenderer, WritableFile,
+    globals::{LiquidGlobals, LiquidGlobalsPage},
+};
 use routes::route_from_path;
 use std::{collections::HashMap, error::Error, fmt::Display, path::PathBuf, sync::Arc};
 use template::Template;
@@ -24,6 +27,13 @@ pub mod template;
 #[derive(Debug)]
 pub enum BuildError {
     Err(String),
+    IoError(String),
+    GlobError(String),
+    DocumentError(String),
+    TemplateError(String),
+    RouteError(String),
+    RenderError(String),
+    JoinError(String),
 }
 
 impl Error for BuildError {}
@@ -31,8 +41,21 @@ impl Error for BuildError {}
 impl Display for BuildError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            BuildError::Err(err) => write!(f, "{}", err),
+            BuildError::Err(msg) => write!(f, "Generic Build Error: {}", msg),
+            BuildError::IoError(msg) => write!(f, "I/O Error: {}", msg),
+            BuildError::GlobError(msg) => write!(f, "Glob Error: {}", msg),
+            BuildError::DocumentError(msg) => write!(f, "Document Error: {}", msg),
+            BuildError::TemplateError(msg) => write!(f, "Template Error: {}", msg),
+            BuildError::RouteError(msg) => write!(f, "Route Error: {}", msg),
+            BuildError::RenderError(msg) => write!(f, "Render Error: {}", msg),
+            BuildError::JoinError(msg) => write!(f, "Task Join Error: {}", msg),
         }
+    }
+}
+
+impl From<tokio::task::JoinError> for BuildError {
+    fn from(err: tokio::task::JoinError) -> Self {
+        BuildError::JoinError(err.to_string())
     }
 }
 
@@ -42,6 +65,7 @@ pub struct Weaver {
     pub routes: Vec<String>,
     pub templates: Vec<Arc<Mutex<Template>>>,
     pub documents: Vec<Arc<Mutex<Document>>>,
+    all_documents_by_route: HashMap<KString, Arc<Mutex<Document>>>,
 }
 
 impl Weaver {
@@ -52,6 +76,7 @@ impl Weaver {
             routes: vec![],
             templates: vec![],
             documents: vec![],
+            all_documents_by_route: HashMap::new(),
         }
     }
 
@@ -67,12 +92,17 @@ impl Weaver {
             match entry {
                 Ok(path) => {
                     let mut doc = Document::new_from_path(path.clone());
+
                     self.tags.append(&mut doc.metadata.tags);
-                    self.routes.push(route_from_path(
-                        self.config.content_dir.clone().into(),
-                        path.clone(),
-                    ));
-                    self.documents.push(Arc::new(Mutex::new(doc)))
+                    // Assuming route_from_path is correct and returns String
+                    let route = route_from_path(self.config.content_dir.clone().into(), path);
+                    self.routes.push(route.clone());
+
+                    let doc_arc_mutex = Arc::new(Mutex::new(doc));
+                    self.documents.push(Arc::clone(&doc_arc_mutex));
+
+                    self.all_documents_by_route
+                        .insert(KString::from(route), doc_arc_mutex);
                 }
                 Err(e) => panic!("{:?}", e),
             }
@@ -82,11 +112,11 @@ impl Weaver {
     }
 
     pub fn scan_templates(&mut self) -> &mut Self {
-        dbg!("searching for templates");
+        dbg!("searching for templates in {}", &self.config.template_dir);
         let extension = match self.config.templating_language {
             TemplateLang::Liquid => ".liquid",
         };
-        for entry in glob(format!("{}/**/*{}", self.config.content_dir, extension).as_str())
+        for entry in glob(format!("{}/**/*{}", self.config.template_dir, extension).as_str())
             .expect("Failed to read glob pattern")
         {
             dbg!(
@@ -96,87 +126,114 @@ impl Weaver {
             match entry {
                 Ok(pathbuf) => self
                     .templates
-                    .push(Arc::new(Mutex::new(Template::new_from_path(pathbuf)))),
-                Err(e) => panic!("{:?}", e),
+                    .push(Arc::new(Mutex::new(Template::new_from_path(pathbuf)))), // Panics on file read/parse errors
+                Err(e) => panic!("{:?}", e), // Panics on glob iteration error
             }
         }
 
         self
     }
 
-    async fn map_from_documents(&self) -> HashMap<KString, Arc<Mutex<Document>>> {
-        let mut map = HashMap::new();
+    async fn write_result_to_system(&self, target: WritableFile) -> Result<(), BuildError> {
+        let full_output_path = target.path.clone();
 
-        for document in self.documents.iter() {
-            let doc_guard = document.lock().await;
-            map.insert(
-                KString::from(route_from_path(
-                    self.config.content_dir.clone().into(),
-                    doc_guard.at_path.clone().into(),
-                )),
-                document.clone(),
-            );
+        // Ensure parent directories exist
+        if let Some(parent) = full_output_path.parent() {
+            tokio::fs::create_dir_all(parent).await.map_err(|e| {
+                BuildError::IoError(format!(
+                    "Failed to create parent directories for {:?}: {}",
+                    full_output_path, e
+                ))
+            })?;
         }
 
-        map
-    }
-
-    async fn write_result_to_system(&self, target: WritableFile) -> Result<(), BuildError> {
-        println!("Writing file {:#?}", target);
-        //let mut file = File::create(target.path).unwrap();
-        //file.write_all(target.contents.as_bytes()).unwrap();
+        tokio::fs::write(&full_output_path, target.contents)
+            .await
+            .map_err(|e| {
+                BuildError::IoError(format!(
+                    "Failed to write file {:?}: {}",
+                    full_output_path, e
+                ))
+            })?;
 
         Ok(())
     }
 
+    // The main build orchestration function
     pub async fn build(&self) -> Result<(), BuildError> {
         dbg!("Starting build process");
 
+        let mut all_liquid_pages_map: HashMap<KString, LiquidGlobalsPage> = HashMap::new();
+        let mut convert_tasks = vec![];
+
+        for document_arc_mutex in self.documents.iter() {
+            let doc_arc_mutex_clone = Arc::clone(document_arc_mutex);
+            let config_arc = Arc::clone(&self.config);
+
+            convert_tasks.push(tokio::spawn(async move {
+                let doc_guard = doc_arc_mutex_clone.lock().await;
+                let route = route_from_path(
+                    config_arc.content_dir.clone().into(),
+                    doc_guard.at_path.clone().into(),
+                );
+                let liquid_page = LiquidGlobalsPage::from(&*doc_guard);
+
+                (KString::from(route), liquid_page)
+            }));
+        }
+
+        let converted_pages: Vec<Result<(KString, LiquidGlobalsPage), tokio::task::JoinError>> =
+            join_all(convert_tasks).await;
+
+        for result in converted_pages {
+            let (route, liquid_page) = result.map_err(|e| BuildError::JoinError(e.to_string()))?;
+            all_liquid_pages_map.insert(route, liquid_page);
+        }
+
+        let all_liquid_pages_map_arc = Arc::new(all_liquid_pages_map);
+
         let templates_arc = Arc::new(self.templates.clone());
-        let document_map = Arc::new(self.map_from_documents().await);
+        let config_arc = Arc::clone(&self.config);
+
         let mut tasks = vec![];
 
-        for document in &self.documents {
-            let document_arc = Arc::clone(document);
-            dbg!("Processing document {}", document_arc.as_ref());
+        for document_arc_mutex in &self.documents {
+            let document_arc = Arc::clone(document_arc_mutex);
+
+            let all_liquid_pages_map_clone = Arc::clone(&all_liquid_pages_map_arc);
+            let mut globals =
+                LiquidGlobals::new(Arc::clone(&document_arc), &all_liquid_pages_map_clone).await;
+
             let templates = Arc::clone(&templates_arc);
-            let config = Arc::clone(&self.config);
-            let map = Arc::clone(&document_map.clone());
+            let config = Arc::clone(&config_arc);
 
             let doc_task = tokio::spawn(async move {
-                let mut globals = LiquidGlobals::new(document_arc.clone(), &map).await;
-                dbg!("DEBUGGING");
                 let md_renderer = MarkdownRenderer::new(document_arc, templates, config);
+
                 md_renderer.render(&mut globals).await
             });
+
             tasks.push(doc_task);
         }
 
-        dbg!("tasks queued");
-        // Wait for all tasks to complete and collect their results
-        // The outer Result is JoinError, the inner Result is from your async function
-        let results: Vec<Result<Result<WritableFile, BuildError>, tokio::task::JoinError>> =
-            join_all(tasks).await;
+        let render_results: Vec<Result<Result<WritableFile, BuildError>, tokio::task::JoinError>> =
+            join_all(tasks).await; // Await all rendering tasks
 
-        // Check for errors in the results
-        for result in results {
-            match result {
-                Ok(inner_result) => {
-                    if let Err(e) = inner_result {
-                        eprintln!("Error during task execution: {}", e);
-                        // Depending on your error handling, you might want to
-                        // return the first error or collect all errors.
-                        return Err(e);
+        // Process the results of all rendering tasks
+        for join_result in render_results {
+            match join_result {
+                Ok(render_result) => match render_result {
+                    Ok(writable_file) => {
+                        self.write_result_to_system(writable_file).await?;
                     }
-
-                    // TODO: Cache output file paths and remove files that aren't part of the
-                    // output.
-                    self.write_result_to_system(inner_result?).await?;
-                }
-                Err(e) => {
-                    eprintln!("Task join error: {}", e);
-                    // Convert the JoinError into your BuildError type
-                    return Err(BuildError::Err(e.to_string()));
+                    Err(render_error) => {
+                        eprintln!("Rendering error: {}", render_error);
+                        return Err(render_error);
+                    }
+                },
+                Err(join_error) => {
+                    eprintln!("Task join error: {}", join_error);
+                    return Err(BuildError::JoinError(join_error.to_string()));
                 }
             }
         }

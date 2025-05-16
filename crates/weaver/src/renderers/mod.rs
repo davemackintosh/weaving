@@ -207,6 +207,7 @@ impl MarkdownRenderer {
         &self,
         template_name: String,
     ) -> Option<&Arc<Mutex<crate::Template>>> {
+        dbg!(&self.templates);
         futures::stream::iter(self.templates.iter())
             .filter(|&t| {
                 let name = template_name.clone();
@@ -246,7 +247,7 @@ mod test {
             Arc::new(Mutex::new(Document::new_from_path(
                 format!("{}/content/with_headings.md", base_path).into(),
             ))),
-            &HashMap::new(),
+            &Arc::new(HashMap::new()),
         )
         .await;
 
@@ -333,7 +334,7 @@ mod test {
             config.clone(),
         );
 
-        let mut data = LiquidGlobals::new(doc_arc, &HashMap::new()).await;
+        let mut data = LiquidGlobals::new(doc_arc, &Arc::new(HashMap::new())).await;
         let result = renderer.render(&mut data).await;
 
         assert_eq!(

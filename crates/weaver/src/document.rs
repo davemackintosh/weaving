@@ -4,14 +4,14 @@ use gray_matter::{Matter, engine::YAML};
 use serde::{Deserialize, Serialize};
 use toml::Value;
 
-#[derive(Debug, Serialize, Deserialize, Default, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 pub struct Heading {
     pub depth: u8,
     pub text: String,
     pub slug: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct Document {
     pub at_path: String,
     pub metadata: BaseMetaData,

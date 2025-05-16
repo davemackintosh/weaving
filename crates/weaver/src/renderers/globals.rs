@@ -44,7 +44,7 @@ pub struct LiquidGlobals {
 impl LiquidGlobals {
     pub async fn new(
         page_arc_mutex: Arc<tokio::sync::Mutex<crate::Document>>,
-        all_documents_by_route: &HashMap<KString, Arc<tokio::sync::Mutex<crate::Document>>>,
+        all_documents_by_route: &Arc<HashMap<KString, LiquidGlobalsPage>>,
     ) -> Self {
         let page_guard = page_arc_mutex.lock().await;
         let page_globals = LiquidGlobalsPage::from(&*page_guard);
@@ -52,11 +52,11 @@ impl LiquidGlobals {
         let mut content_map = HashMap::new();
         for (route, doc_arc_mutex) in all_documents_by_route.iter() {
             if route != &page_globals.route {
-                let doc_guard = doc_arc_mutex.lock().await;
-                let content_page_globals = LiquidGlobalsPage::from(&*doc_guard);
-                content_map.insert(route.clone(), content_page_globals);
+                content_map.insert(route.clone(), doc_arc_mutex.clone());
             }
         }
+
+        drop(page_guard);
 
         Self {
             page: page_globals,
@@ -208,17 +208,26 @@ mod tests {
         );
         let content_doc_2 = create_mock_document("/about", "About Us", None, None);
 
-        let page_arc_mutex = Arc::new(Mutex::new(page_doc));
-        let post1_arc_mutex = Arc::new(Mutex::new(content_doc_1));
-        let about_arc_mutex = Arc::new(Mutex::new(content_doc_2));
+        let page_arc_mutex = Arc::new(Mutex::new(page_doc.clone()));
+        let post1_arc_mutex = Arc::new(Mutex::new(content_doc_1.clone()));
+        let about_arc_mutex = Arc::new(Mutex::new(content_doc_2.clone()));
 
         let mut all_documents_by_route = HashMap::new();
-        all_documents_by_route.insert(KString::from("/page"), Arc::clone(&page_arc_mutex));
-        all_documents_by_route.insert(KString::from("/posts/post-1"), Arc::clone(&post1_arc_mutex));
-        all_documents_by_route.insert(KString::from("/about"), Arc::clone(&about_arc_mutex));
+        all_documents_by_route.insert(KString::from("/page"), LiquidGlobalsPage::from(&page_doc));
+        all_documents_by_route.insert(
+            KString::from("/posts/post-1"),
+            LiquidGlobalsPage::from(&content_doc_1),
+        );
+        all_documents_by_route.insert(
+            KString::from("/about"),
+            LiquidGlobalsPage::from(&content_doc_2),
+        );
 
-        let liquid_globals =
-            LiquidGlobals::new(Arc::clone(&page_arc_mutex), &all_documents_by_route).await;
+        let liquid_globals = LiquidGlobals::new(
+            Arc::clone(&page_arc_mutex),
+            &Arc::new(all_documents_by_route),
+        )
+        .await;
 
         let page_doc_guard = page_arc_mutex.lock().await;
         let expected_page_globals = LiquidGlobalsPage::from(&*page_doc_guard);
@@ -265,13 +274,17 @@ mod tests {
     #[tokio::test]
     async fn test_liquid_globals_new_only_page_doc() {
         let page_doc = create_mock_document("/index", "Home Page", Some("<p>home</p>"), None);
-        let page_arc_mutex = Arc::new(Mutex::new(page_doc));
+        let page_arc_mutex = Arc::new(Mutex::new(page_doc.clone()));
+        let page_global = LiquidGlobalsPage::from(&page_doc);
 
         let mut all_documents_by_route = HashMap::new();
-        all_documents_by_route.insert(KString::from("/index"), Arc::clone(&page_arc_mutex));
+        all_documents_by_route.insert(KString::from("/index"), page_global);
 
-        let liquid_globals =
-            LiquidGlobals::new(Arc::clone(&page_arc_mutex), &all_documents_by_route).await;
+        let liquid_globals = LiquidGlobals::new(
+            Arc::clone(&page_arc_mutex),
+            &Arc::new(all_documents_by_route),
+        )
+        .await;
 
         let page_doc_guard = page_arc_mutex.lock().await;
         let expected_page_globals = LiquidGlobalsPage::from(&*page_doc_guard);
