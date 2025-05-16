@@ -57,8 +57,10 @@ description: String?
 user: Map<String, any>
 ```
 
-The available filters in liquid templates are:
+The built in filters in liquid templates are:
 
 ```
-TBD
+abs, append, at_least, at_most, capitalize, ceil, compact, concat, date, default, divided_by, downcase, escape, escape_once, first, floor, join, last, lstrip, map, minus, modulo, newline_to_br, plus, prepend, raw, remove, remove_first, replace, replace_first, reverse, round, rstrip, size, slice, sort, sort_natural, split, strip, strip_html, strip_newlines, times, truncate, truncatewords, uniq, upcase, url_decode, url_encode, where
 ```
+
+There is another filter built specifically for weaving `raw` which will dangerously output anything without any formatting or XSS protection.
