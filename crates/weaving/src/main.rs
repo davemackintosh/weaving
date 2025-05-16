@@ -2,7 +2,7 @@ use std::{fs, path::PathBuf};
 
 use clap::{Parser, Subcommand};
 use resolve_path::PathResolveExt;
-use weaver::Weaver;
+use weaver_lib::Weaver;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]

@@ -9,7 +9,7 @@ categories = ["static-site-generation", "blog-framework"]
 repository = "https://github.com/davemackintosh/weaving/"
 
 [dependencies]
-weaver = { path = "../weaver" }
+weaver-lib = { path = "../weaver" }
 tokio = { version = "1.45.0", features = [
 	"sync",
 	"rt",

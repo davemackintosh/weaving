@@ -1,5 +1,5 @@
 [package]
-name = "weaver"
+name = "weaver-lib"
 version = "0.1.0"
 edition = "2024"
 license-file = "../../LICENSE"
