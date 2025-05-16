@@ -66,11 +66,6 @@ impl WeaverConfig {
         let config_file_result = std::fs::read_to_string(format!("{}/weaving.toml", inst.base_dir));
 
         if config_file_result.is_err() {
-            dbg!(format!(
-                "Didn't find a weaving.toml at '{}'",
-                &inst.base_dir
-            ));
-            dbg!(format!("using default config {:#?}", &inst));
             return Self {
                 version: "1".into(),
                 base_dir: inst.base_dir.clone(),
@@ -83,19 +78,9 @@ impl WeaverConfig {
                 templating_language: TemplateLang::Liquid,
                 image_config: inst.image_config,
             };
-        } else {
-            dbg!(format!(
-                "Found config file at '{}/weaving.toml'",
-                inst.base_dir
-            ));
         }
-
         let user_supplied_config: WeaverConfig =
             toml::from_str(config_file_result.unwrap().as_str()).unwrap();
-        dbg!(format!(
-            "using supplied config {:#?}",
-            &user_supplied_config
-        ));
 
         Self {
             version: user_supplied_config.version,
@@ -132,18 +117,11 @@ impl WeaverConfig {
         let config_file_result = std::fs::read_to_string(format!("{}/weaving.toml", safe_path));
 
         if config_file_result.is_err() {
-            dbg!(format!("Didn't find a weaving.toml at '{}'", &safe_path));
             return Self::new();
-        } else {
-            dbg!(format!("Found config file at '{}/weaving.toml'", safe_path));
         }
 
         let user_supplied_config: WeaverConfig =
             toml::from_str(config_file_result.unwrap().as_str()).unwrap();
-        dbg!(format!(
-            "using supplied config {:#?}",
-            &user_supplied_config
-        ));
 
         Self {
             version: user_supplied_config.version,

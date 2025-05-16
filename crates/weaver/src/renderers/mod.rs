@@ -66,7 +66,10 @@ impl<'a> ContentRenderer for TemplateRenderer<'a> {
                         contents: result,
                         path: out_path_for_document(for_document, weaver_config),
                     }),
-                    Err(err) => Err(BuildError::Err(err.to_string())),
+                    Err(err) => {
+                        dbg!("Template rendering error {:#?}", &err);
+                        Err(BuildError::Err(err.to_string()))
+                    }
                 }
             }
         }
@@ -105,12 +108,6 @@ impl ContentRenderer for MarkdownRenderer {
             .find_template_by_string(doc_guard.metadata.template.clone())
             .await
             .unwrap();
-
-        dbg!(
-            "rendering markdown with template {}, {}",
-            &doc_guard.at_path,
-            &template
-        );
 
         doc_guard.toc = self.toc_from_document(&doc_guard);
 
@@ -216,7 +213,6 @@ impl MarkdownRenderer {
         &self,
         template_name: String,
     ) -> Option<&Arc<Mutex<crate::Template>>> {
-        dbg!(&self.templates);
         futures::stream::iter(self.templates.iter())
             .filter(|&t| {
                 let name = template_name.clone();
@@ -366,7 +362,7 @@ mod test {
 			<article>
 				<h1>heading 1</h1>
 <p>I am a paragraph.</p>
-<h2>heading &lt;span&gt;2&lt;/span&gt;</h2>
+<h2>heading <span>2</span></h2>
 <p>I'm the second paragraph.</p>
 <h3>heading 3</h3>
 <h4>heading 4</h4>

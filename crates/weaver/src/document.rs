@@ -56,8 +56,6 @@ impl Document {
             panic!("failed to read '{}'", path.display());
         }
 
-        dbg!("read post {}", contents_result.as_ref().unwrap());
-
         let matter = Matter::<YAML>::new();
         let parse_result = matter.parse(contents_result.as_ref().unwrap().as_str());
         let base_metadata_opt = parse_result

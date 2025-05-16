@@ -81,14 +81,9 @@ impl Weaver {
     }
 
     pub fn scan_content(&mut self) -> &mut Self {
-        dbg!("searching for content");
         for entry in glob(format!("{}/**/*.md", self.config.content_dir).as_str())
             .expect("Failed to read glob pattern")
         {
-            dbg!(
-                "Found document: {}",
-                entry.as_ref().unwrap().to_string_lossy()
-            );
             match entry {
                 Ok(path) => {
                     let mut doc = Document::new_from_path(path.clone());
@@ -112,17 +107,12 @@ impl Weaver {
     }
 
     pub fn scan_templates(&mut self) -> &mut Self {
-        dbg!("searching for templates in {}", &self.config.template_dir);
         let extension = match self.config.templating_language {
             TemplateLang::Liquid => ".liquid",
         };
         for entry in glob(format!("{}/**/*{}", self.config.template_dir, extension).as_str())
             .expect("Failed to read glob pattern")
         {
-            dbg!(
-                "Found template: {}",
-                entry.as_ref().unwrap().to_string_lossy()
-            );
             match entry {
                 Ok(pathbuf) => self
                     .templates
@@ -161,8 +151,6 @@ impl Weaver {
 
     // The main build orchestration function
     pub async fn build(&self) -> Result<(), BuildError> {
-        dbg!("Starting build process");
-
         let mut all_liquid_pages_map: HashMap<KString, LiquidGlobalsPage> = HashMap::new();
         let mut convert_tasks = vec![];
 
@@ -238,7 +226,6 @@ impl Weaver {
             }
         }
 
-        dbg!("Build process finished successfully");
         Ok(())
     }
 }
