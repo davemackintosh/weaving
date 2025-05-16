@@ -3,6 +3,7 @@ name = "weaver"
 version = "0.1.0"
 edition = "2024"
 license-file = "../../LICENSE"
+description = "static site generator as a library, markdown and liquid in, HTML out."
 keywords = ["static", "site", "generator", "library", "no-config"]
 categories = ["static-site-generation", "blog-framework"]
 exclude = ["./test_fixtures"]
