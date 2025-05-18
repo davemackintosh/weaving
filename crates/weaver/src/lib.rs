@@ -1,7 +1,9 @@
+use config::{TemplateLang, WeaverConfig};
 use document::Document;
 use futures::future::join_all;
 use glob::glob;
 use liquid::model::KString;
+use owo_colors::OwoColorize;
 use renderers::{
     ContentRenderer, MarkdownRenderer, WritableFile,
     globals::{LiquidGlobals, LiquidGlobalsPage},
@@ -10,8 +12,6 @@ use routes::route_from_path;
 use std::{collections::HashMap, error::Error, fmt::Display, path::PathBuf, sync::Arc};
 use template::Template;
 use tokio::sync::Mutex;
-
-use config::{TemplateLang, WeaverConfig};
 
 /// Weaver is the library that powers weaving, as in Hugo Weaving. It does nothing but compile
 /// templates and markdown files to their static counterparts.
@@ -137,6 +137,7 @@ impl Weaver {
             })?;
         }
 
+        println!("Writing {}", full_output_path.display().green());
         tokio::fs::write(&full_output_path, target.contents)
             .await
             .map_err(|e| {
@@ -215,12 +216,12 @@ impl Weaver {
                         self.write_result_to_system(writable_file).await?;
                     }
                     Err(render_error) => {
-                        eprintln!("Rendering error: {}", render_error);
+                        eprintln!("Rendering error: {}", render_error.red());
                         return Err(render_error);
                     }
                 },
                 Err(join_error) => {
-                    eprintln!("Task join error: {}", join_error);
+                    eprintln!("Task join error: {}", join_error.red());
                     return Err(BuildError::JoinError(join_error.to_string()));
                 }
             }

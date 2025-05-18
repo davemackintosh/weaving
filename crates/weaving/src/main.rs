@@ -1,11 +1,13 @@
+use clap::{Parser, Subcommand};
+use futures::future::join_all;
+use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use owo_colors::OwoColorize;
+use resolve_path::PathResolveExt;
+use rouille::Response;
 use std::{
     fs, io,
     path::{Path, PathBuf},
 };
-
-use clap::{Parser, Subcommand};
-use resolve_path::PathResolveExt;
-use rouille::Response;
 use template::{Templates, get_new_site};
 use weaver_lib::Weaver;
 
@@ -58,7 +60,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             name,
             template,
         } => {
-            println!("{}", path.resolve().display());
             let target_path = fs::canonicalize(path.resolve())?;
             let output_path: PathBuf = format!("{}/{}", target_path.display(), name).into();
             let template = match template.as_str() {
@@ -71,51 +72,110 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .expect("failed to create your new site, sorry about that.");
         }
         Commands::Serve { path, address } => {
-            let instance = Weaver::new(fs::canonicalize(path.resolve())?);
-            dbg!("path is {}", fs::canonicalize(path.resolve())?);
-            dbg!("instance build path is {}", &instance.config.build_dir);
-            rouille::start_server(address, move |request| {
-                let req_path = request.url();
-                dbg!(format!("Received request for: {}", req_path));
+            let safe_path = fs::canonicalize(path.resolve())?;
+            let mut serve_tasks = vec![];
 
-                let sanitized_req_path = sanitize_path(&req_path);
-                dbg!("sanitzed to {}", &sanitized_req_path);
+            println!("{}", "building".green());
+            let mut instance = Weaver::new(fs::canonicalize(path.resolve())?);
+            instance.scan_content().scan_templates().build().await?;
 
-                let mut file_path = format!(
-                    "{}/{}",
-                    instance.config.build_dir,
-                    &sanitized_req_path.display()
-                );
+            println!("site available at http://{}", &address.green());
 
-                // If the request is for a directory (ends with / or is the root /)
-                // append index.html
-                if req_path.ends_with('/') || req_path == "/" {
-                    file_path = format!("{}/index.html", file_path);
-                }
+            let watch_path = safe_path.clone();
 
-                dbg!(format!("Attempting to serve file: {:?}", file_path));
+            // Watch files for changes.
+            serve_tasks.push(tokio::spawn(async move {
+                let (tx, rx) = std::sync::mpsc::channel();
+                let mut instance = Weaver::new(watch_path);
+                let mut watcher = RecommendedWatcher::new(tx, Config::default()).unwrap();
+                watcher
+                    .watch(path.as_ref(), RecursiveMode::Recursive)
+                    .unwrap();
+                println!("{}", "watching for changes.".blue());
 
-                // Read the file content synchronously using std::fs
-                match fs::read(&file_path) {
-                    Ok(content) => {
-                        let mime_type = mime_guess::from_path(&file_path).first_or_octet_stream();
+                for res in rx {
+                    match res {
+                        Ok(e) => match e.kind {
+                            EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_) => {
+                                // Should probably add excludes to config to ignore things like
+                                // node_modules but for now, ignore the build dir and git.
+                                let skip_build = e.paths.iter().any(|p| {
+                                    p.starts_with(instance.config.build_dir.clone())
+                                        || p.components().any(|c| {
+                                            if let std::path::Component::Normal(os_str) = c {
+                                                os_str == ".git"
+                                            } else {
+                                                false // Only check Normal components
+                                            }
+                                        })
+                                });
 
-                        Response::from_data(mime_type.to_string(), content)
+                                if !skip_build {
+                                    println!("{:#?} changed, rebuilding.", e.paths.green());
+                                    instance
+                                        .scan_content()
+                                        .scan_templates()
+                                        .build()
+                                        .await
+                                        .unwrap();
+                                }
+                            }
+                            _ => {}
+                        },
+                        Err(error) => eprintln!("Error: {error:?}"),
                     }
-                    Err(err) => {
-                        // Handle file system errors
-                        let status = match err.kind() {
-                            io::ErrorKind::NotFound => 404,
-                            _ => 500,
-                        };
-
-                        eprintln!("Error reading file {:?}: {}", file_path, err);
-
-                        // Create an error response
-                        Response::text(format!("Error: {}", err)).with_status_code(status) // Set the appropriate status code
-                    }
                 }
-            });
+            }));
+
+            // HTTP server task.
+            serve_tasks.push(tokio::spawn(async move {
+                rouille::start_server(address, move |request| {
+                    let req_path = request.url();
+                    let instance = Weaver::new(safe_path.clone());
+                    println!(
+                        "Received {} request for: {}",
+                        request.method().blue(),
+                        req_path.yellow()
+                    );
+
+                    let sanitized_req_path = sanitize_path(&req_path);
+
+                    let mut file_path = format!(
+                        "{}/{}",
+                        instance.config.build_dir,
+                        &sanitized_req_path.display()
+                    );
+
+                    // If the request is for a directory (ends with / or is the root /)
+                    // append index.html
+                    if req_path.ends_with('/') || req_path == "/" {
+                        file_path = format!("{}index.html", file_path);
+                    }
+
+                    println!("Serving: {:?}", &file_path.green());
+
+                    match fs::read(&file_path) {
+                        Ok(content) => {
+                            let mime_type =
+                                mime_guess::from_path(&file_path).first_or_octet_stream();
+
+                            Response::from_data(mime_type.to_string(), content)
+                        }
+                        Err(err) => {
+                            // Handle file system errors
+                            let status = match err.kind() {
+                                io::ErrorKind::NotFound => 404,
+                                _ => 500,
+                            };
+
+                            eprintln!("Error reading file {:?}: {}", file_path.yellow(), err.red());
+                            Response::text(format!("Error: {}", err)).with_status_code(status)
+                        }
+                    }
+                });
+            }));
+
+            join_all(serve_tasks).await;
         }
     }
 
