@@ -32,4 +32,12 @@ impl Template {
             },
         }
     }
+
+    pub fn new_from_string(contents: String, template_language: TemplateLang) -> Self {
+        Self {
+            at_path: "".into(),
+            contents: contents,
+            template_language,
+        }
+    }
 }

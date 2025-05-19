@@ -10,9 +10,11 @@ use markdown::{ParseOptions, mdast::Node};
 use slug::slugify;
 use tokio::sync::Mutex;
 
+use crate::config::TemplateLang;
 use crate::document::Heading;
 use crate::filters::raw_html::RawHtml;
 use crate::routes::route_from_path;
+use crate::template::Template;
 use crate::{BuildError, document::Document};
 
 #[derive(Debug, PartialEq)]
@@ -111,8 +113,22 @@ impl ContentRenderer for MarkdownRenderer {
 
         doc_guard.toc = self.toc_from_document(&doc_guard);
 
+        let templated_md_html =
+            Template::new_from_string(doc_guard.markdown.clone(), TemplateLang::Liquid);
+
+        let body_template_renderer = TemplateRenderer::new(
+            Arc::new(Mutex::new(templated_md_html)),
+            &doc_guard,
+            self.weaver_config.clone(),
+        );
+        dbg!(&data);
+        let body_html = body_template_renderer
+            .render(&mut data.to_owned())
+            .await
+            .unwrap();
+
         let markdown_html = markdown::to_html_with_options(
-            doc_guard.markdown.as_str(),
+            body_html.contents.as_str(),
             &markdown::Options {
                 compile: CompileOptions {
                     allow_dangerous_html: true,
@@ -122,6 +138,7 @@ impl ContentRenderer for MarkdownRenderer {
             },
         )
         .expect("failed to render markdown to html");
+
         let template_renderer =
             TemplateRenderer::new(template.clone(), &doc_guard, self.weaver_config.clone());
         data.page.body = markdown_html;
