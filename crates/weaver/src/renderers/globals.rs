@@ -65,15 +65,15 @@ impl LiquidGlobals {
                 None
             }
             .and_then(|_| components.next()) // Get the next component after root (if any)
-            .and_then(|c| {
+            .map(|c| {
                 if let Component::Normal(os_str) = c {
-                    Some(KString::from(os_str.to_string_lossy().into_owned()))
+                    KString::from(os_str.to_string_lossy().into_owned())
                 } else {
-                    Some(KString::from("root"))
+                    KString::from("root")
                 }
             });
 
-            if !first_component.is_some() {
+            if first_component.is_none() {
                 content_map.insert(
                     route.clone(),
                     HashMap::from([(route.clone(), doc_arc_mutex.clone())]),
