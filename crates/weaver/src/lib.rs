@@ -24,6 +24,13 @@ pub mod renderers;
 pub mod routes;
 pub mod template;
 
+// Helper function to normalize line endings in a byte vector
+pub fn normalize_line_endings(bytes: &[u8]) -> String {
+    let s = str::from_utf8(bytes).expect("Invalid UTF-8 in WritableFile content");
+    // Replace all CRLF (\r\n) with LF (\n)
+    s.replace("\r\n", "\n")
+}
+
 #[derive(Debug)]
 pub enum BuildError {
     Err(String),

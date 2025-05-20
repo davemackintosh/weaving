@@ -2,7 +2,7 @@ use std::{ffi::OsStr, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::TemplateLang;
+use crate::{config::TemplateLang, normalize_line_endings};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Template {
@@ -20,9 +20,11 @@ impl Template {
             panic!("failed to read '{}'", path.display());
         }
 
+        let parseable = normalize_line_endings(contents_result.as_ref().unwrap().as_bytes());
+
         Self {
             at_path: path.clone(),
-            contents: contents_result.unwrap(),
+            contents: parseable,
             template_language: match path.clone().extension().and_then(OsStr::to_str).unwrap() {
                 "liquid" => TemplateLang::Liquid,
                 _ => panic!(

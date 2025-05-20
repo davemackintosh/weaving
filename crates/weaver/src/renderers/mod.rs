@@ -121,7 +121,6 @@ impl ContentRenderer for MarkdownRenderer {
             &doc_guard,
             self.weaver_config.clone(),
         );
-        dbg!(&data);
         let body_html = body_template_renderer
             .render(&mut data.to_owned())
             .await
@@ -246,19 +245,11 @@ impl MarkdownRenderer {
 mod test {
     use std::collections::HashMap;
 
-    use crate::{config::WeaverConfig, template::Template};
+    use crate::{config::WeaverConfig, normalize_line_endings, template::Template};
 
     use super::*;
 
     use pretty_assertions::assert_eq;
-
-    // Helper function to normalize line endings in a byte vector
-    fn normalize_line_endings(bytes: &[u8]) -> String {
-        // Attempt to convert bytes to a UTF-8 string
-        let s = str::from_utf8(bytes).expect("Invalid UTF-8 in WritableFile content");
-        // Replace all CRLF (\r\n) with LF (\n)
-        s.replace("\r\n", "\n")
-    }
 
     #[tokio::test]
     async fn test_liquid() {

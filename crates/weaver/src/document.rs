@@ -4,6 +4,8 @@ use gray_matter::{Matter, engine::YAML};
 use serde::{Deserialize, Serialize};
 use toml::Value;
 
+use crate::normalize_line_endings;
+
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 pub struct Heading {
     pub depth: u8,
@@ -57,7 +59,8 @@ impl Document {
         }
 
         let matter = Matter::<YAML>::new();
-        let parse_result = matter.parse(contents_result.as_ref().unwrap().as_str());
+        let parseable = normalize_line_endings(contents_result.as_ref().unwrap().as_bytes());
+        let parse_result = matter.parse(&parseable);
         let base_metadata_opt = parse_result
             .data
             .as_ref()

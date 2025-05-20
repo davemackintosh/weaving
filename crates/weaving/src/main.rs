@@ -125,7 +125,6 @@ address = "localhost:8080"
             // Watch files for changes.
             serve_tasks.push(tokio::spawn(async move {
                 let (tx, rx) = std::sync::mpsc::channel();
-                let mut instance = Weaver::new(watch_path);
                 let mut watcher = RecommendedWatcher::new(tx, Config::default()).unwrap();
                 watcher
                     .watch(path.as_ref(), RecursiveMode::Recursive)
@@ -133,6 +132,7 @@ address = "localhost:8080"
                 println!("{}", "watching for changes.".blue());
 
                 for res in rx {
+                    let mut instance = Weaver::new(watch_path.clone());
                     match res {
                         Ok(e) => match e.kind {
                             EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_) => {
@@ -140,6 +140,7 @@ address = "localhost:8080"
                                 // node_modules but for now, ignore the build dir and git.
                                 let skip_build = e.paths.iter().any(|p| {
                                     p.starts_with(instance.config.build_dir.clone())
+                                        || p.ends_with("~")
                                         || p.components().any(|c| {
                                             if let std::path::Component::Normal(os_str) = c {
                                                 os_str == ".git"
@@ -151,12 +152,21 @@ address = "localhost:8080"
 
                                 if !skip_build {
                                     println!("{:#?} changed, rebuilding.", e.paths.green());
-                                    instance
-                                        .scan_content()
-                                        .scan_templates()
-                                        .build()
-                                        .await
-                                        .unwrap();
+                                    let build_result =
+                                        instance.scan_content().scan_templates().build().await;
+
+                                    match build_result {
+                                        Ok(_) => {
+                                            println!("{}", "Built successfully".blue());
+                                        }
+                                        Err(err) => {
+                                            eprintln!(
+                                                "{} {}",
+                                                "Failed to build because".red(),
+                                                err.to_string().red()
+                                            );
+                                        }
+                                    }
                                 }
                             }
                             _ => {}
