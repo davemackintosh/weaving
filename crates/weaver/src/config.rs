@@ -23,6 +23,24 @@ impl Default for ImageConfig {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
+pub struct ServeConfig {
+    pub watch_excludes: Vec<String>,
+    pub address: String,
+    pub npm_build: bool,
+}
+
+impl Default for ServeConfig {
+    fn default() -> Self {
+        Self {
+            watch_excludes: vec![".git".into(), "node_modules".into(), "site".into()],
+            address: "localhost:8080".into(),
+            npm_build: false,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(default)]
 pub struct WeaverConfig {
     pub version: String,
     pub base_dir: String,
@@ -34,6 +52,7 @@ pub struct WeaverConfig {
     pub build_dir: String,
     pub templating_language: TemplateLang,
     pub image_config: ImageConfig,
+    pub serve_config: ServeConfig,
 }
 
 impl Default for WeaverConfig {
@@ -55,6 +74,7 @@ impl Default for WeaverConfig {
             template_dir: "templates".into(),
             templating_language: TemplateLang::Liquid,
             image_config: Default::default(),
+            serve_config: Default::default(),
         }
     }
 }
@@ -77,6 +97,7 @@ impl WeaverConfig {
                 build_dir: format!("{}/{}", &inst.base_dir, inst.build_dir),
                 templating_language: TemplateLang::Liquid,
                 image_config: inst.image_config,
+                serve_config: inst.serve_config,
             };
         }
         let user_supplied_config: WeaverConfig =
@@ -108,6 +129,7 @@ impl WeaverConfig {
             ),
             templating_language: user_supplied_config.templating_language,
             image_config: user_supplied_config.image_config,
+            serve_config: user_supplied_config.serve_config,
         }
     }
 
@@ -134,6 +156,7 @@ impl WeaverConfig {
             template_dir: format!("{}/{}", &safe_path, user_supplied_config.template_dir),
             templating_language: user_supplied_config.templating_language,
             image_config: user_supplied_config.image_config,
+            serve_config: user_supplied_config.serve_config,
         }
     }
 }
@@ -185,7 +208,7 @@ mod test {
     #[test]
     fn test_with_filled_config_file() {
         let base_path_wd = std::env::current_dir().unwrap().display().to_string();
-        let base_path = format!("{}/test_fixtures/config/custom_config", base_path_wd);
+        let base_path = format!("{}/test_fixtures/config/full_config", base_path_wd);
         let config = WeaverConfig::new_from_path(base_path.clone().into());
 
         assert_eq!(config.base_dir, base_path);
@@ -194,6 +217,9 @@ mod test {
         assert_eq!(config.public_dir, format!("{}/static", base_path));
         assert_eq!(config.build_dir, format!("{}/site", base_path));
         assert_eq!(config.base_url, "localhost:9090");
+        assert_eq!(config.image_config.quality, 100);
+        assert_eq!(config.serve_config.npm_build, true);
+        assert_eq!(config.serve_config.address, "localhost:3030");
     }
 
     #[test]

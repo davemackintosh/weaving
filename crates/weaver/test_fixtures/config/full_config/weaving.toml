@@ -2,3 +2,10 @@ content_dir = "content"
 base_url = "localhost:9090"
 includes_dir = "partials"
 public_dir = "static"
+
+[image_config]
+quality = 100
+
+[serve_config]
+npm_build = true
+address = "localhost:3030"

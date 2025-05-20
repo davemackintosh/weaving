@@ -36,12 +36,16 @@ enum Commands {
         #[arg(short, long, default_value = "default")]
         template: String,
     },
-    Serve {
+    Config {
         #[arg(short, long, default_value = ".")]
         path: PathBuf,
 
-        #[arg(short, long, default_value = "localhost:8080")]
-        address: String,
+        #[arg(short, long, default_value = "false")]
+        force: bool,
+    },
+    Serve {
+        #[arg(short, long, default_value = ".")]
+        path: PathBuf,
     },
 }
 
@@ -71,7 +75,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .await
                 .expect("failed to create your new site, sorry about that.");
         }
-        Commands::Serve { path, address } => {
+        Commands::Config { path, force } => {
+            // Check if there is a config file or not and then check the force flag.
+            let target_path = fs::canonicalize(path.resolve())?;
+            let config_exists =
+                fs::exists(format!("{}/weaving.toml", &target_path.display())).unwrap();
+
+            println!(
+                "config exists at {}? {}",
+                format!("{}/weaving.toml", &target_path.display()),
+                config_exists
+            );
+
+            if config_exists && force || !config_exists {
+                fs::write(
+                    format!("{}/weaving.toml", &target_path.display()),
+                    r#"version = 1
+content_dir = "content"
+base_url = "localhost:8080"
+includes_dir = "includes"
+public_dir = "public"
+build_dir = "site"
+template_dir = "templates"
+templating_language = "liquid"
+
+[image_config]
+quality = 83
+
+[serve_config]
+watch_excludes = [".git", "node_modules", "site"]
+npm_build = false
+address = "localhost:8080"
+"#,
+                )?;
+            }
+        }
+        Commands::Serve { path } => {
             let safe_path = fs::canonicalize(path.resolve())?;
             let mut serve_tasks = vec![];
 
@@ -79,7 +118,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut instance = Weaver::new(fs::canonicalize(path.resolve())?);
             instance.scan_content().scan_templates().build().await?;
 
-            println!("site available at http://{}", &address.green());
+            let address = instance.config.serve_config.address.clone();
+
+            println!(
+                "{}{}",
+                "site available at http://".green(),
+                &address.green()
+            );
 
             let watch_path = safe_path.clone();
 
