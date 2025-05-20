@@ -198,7 +198,7 @@ address = "localhost:8080"
                     // If the request is for a directory (ends with / or is the root /)
                     // append index.html
                     if req_path.ends_with('/') || req_path == "/" {
-                        file_path = format!("{}index.html", file_path);
+                        file_path = format!("{}/index.html", file_path);
                     }
 
                     println!("Serving: {:?}", &file_path.green());
