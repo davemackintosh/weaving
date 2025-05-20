@@ -81,12 +81,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let config_exists =
                 fs::exists(format!("{}/weaving.toml", &target_path.display())).unwrap();
 
-            println!(
-                "config exists at {}? {}",
-                format!("{}/weaving.toml", &target_path.display()),
-                config_exists
-            );
-
             if config_exists && force || !config_exists {
                 fs::write(
                     format!("{}/weaving.toml", &target_path.display()),

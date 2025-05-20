@@ -1,0 +1,146 @@
+# Copied and modified from the rimage crate github action.
+# https://github.com/SalOne22/rimage/blob/main/.github/workflows/rimage.yml
+name: weaving
+
+env:
+  CARGO_TERM_COLOR: always
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - ".github/**"
+      - ".gitignore"
+      - "**.md"
+      - "LICENSE**"
+  pull_request:
+    paths-ignore:
+      - ".github/**"
+      - ".gitignore"
+      - "**.md"
+      - "LICENSE**"
+    types:
+      - opened
+      - synchronize
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: test
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+          - x86_64-pc-windows-msvc
+          - i686-pc-windows-msvc
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+            target-apt-arch: amd64
+            target-apt-arch: amd64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04
+            target-apt-arch: arm64
+            target-apt-arch: arm64
+          - target: x86_64-pc-windows-msvc
+            os: windows-2019
+          - target: i686-pc-windows-msvc
+            os: windows-2019
+          - target: x86_64-apple-darwin
+            os: macos-13
+          - target: aarch64-apple-darwin
+            os: macos-14
+
+    env:
+      CARGO_BUILD_TARGET: ${{ matrix.target }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: set up ubuntu multiarch
+        if: startsWith(matrix.os, 'ubuntu') && matrix.target-apt-arch != 'amd64'
+        run: |
+          readonly DISTRO_CODENAME=jammy
+          sudo dpkg --add-architecture "${{ matrix.target-apt-arch }}"
+          sudo sed -i "s/^deb http/deb [arch=$(dpkg-architecture -q DEB_HOST_ARCH)] http/" /etc/apt/sources.list
+          sudo sed -i "s/^deb mirror/deb [arch=$(dpkg-architecture -q DEB_HOST_ARCH)] mirror/" /etc/apt/sources.list
+          for suite in '' '-updates' '-backports' '-security'; do
+            echo "deb [arch=${{ matrix.target-apt-arch }}] http://ports.ubuntu.com/ $DISTRO_CODENAME$suite main universe multiverse" | \
+            sudo tee -a /etc/apt/sources.list >/dev/null
+          done
+
+      - name: install qemu and aarch64 cross compiler
+        if: startsWith(matrix.target, 'aarch64-unknown-linux')
+        run: |
+          sudo apt-get -yq update
+          sudo apt-get -yq install qemu-user gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6:arm64
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: install rust toolchain (rust-toolchain-reborn)
+        uses: crusty-pie/toolchain@v1.0.8
+        with:
+          profile: minimal
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - uses: ilammy/setup-nasm@v1
+
+      - uses: taiki-e/install-action@nextest
+
+      - name: install dependencies (linux)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get -yq update
+          sudo apt-get -yq install ninja-build meson
+
+      - name: install dependencies (macos)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          brew install ninja meson
+
+      - name: install dependencies (windows)
+        if: startsWith(matrix.os, 'windows')
+        run: |
+          choco install -y ninja
+          pip install meson
+
+      - name: test
+        run: cargo test 
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install dependencies
+        run: |
+          sudo apt-get -yq update
+          sudo apt-get -yq install ninja-build meson nasm
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: install rust toolchain (rust-toolchain-reborn)
+        uses: crusty-pie/toolchain@v1.0.8
+        with:
+          profile: minimal
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - name: formatting check
+        run: cargo fmt --all -- --check
+
+      - name: clippy check
+        run: cargo clippy --all-features -- -D warnings
