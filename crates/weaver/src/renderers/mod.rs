@@ -252,6 +252,14 @@ mod test {
 
     use pretty_assertions::assert_eq;
 
+    // Helper function to normalize line endings in a byte vector
+    fn normalize_line_endings(bytes: &[u8]) -> String {
+        // Attempt to convert bytes to a UTF-8 string
+        let s = str::from_utf8(bytes).expect("Invalid UTF-8 in WritableFile content");
+        // Replace all CRLF (\r\n) with LF (\n)
+        s.replace("\r\n", "\n")
+    }
+
     #[tokio::test]
     async fn test_liquid() {
         let base_path_wd = std::env::current_dir().unwrap().display().to_string();
@@ -275,7 +283,8 @@ mod test {
 
         assert_eq!(
             WritableFile {
-                contents: "<!doctype html>
+                contents: normalize_line_endings(
+                    b"<!doctype html>
 <html>
 	<head>
 		<title>test</title>
@@ -283,6 +292,7 @@ mod test {
 	<body></body>
 </html>
 "
+                )
                 .into(),
                 path: format!("{}/site/with_headings/index.html", base_path).into(),
             },
@@ -361,7 +371,8 @@ mod test {
 
         assert_eq!(
             WritableFile {
-                contents: r#"<!doctype html>
+                contents: normalize_line_endings(
+                    br#"<!doctype html>
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
@@ -391,6 +402,7 @@ mod test {
 </html>
 
 "#
+                )
                 .into(),
                 path: format!("{}/site/with_headings/index.html", base_path).into()
             },
