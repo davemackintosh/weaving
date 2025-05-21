@@ -26,6 +26,26 @@ pub mod renderers;
 pub mod routes;
 pub mod template;
 
+use std::fs;
+use std::path::Path;
+
+fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result<WritableFile, BuildError> {
+    fs::create_dir_all(&dst).unwrap();
+    for entry in fs::read_dir(src).unwrap() {
+        let entry = entry.unwrap();
+        let ty = entry.file_type().unwrap();
+        if ty.is_dir() {
+            copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        } else {
+            fs::copy(entry.path(), dst.as_ref().join(entry.file_name())).unwrap();
+        }
+    }
+    Ok(WritableFile {
+        contents: "".into(),
+        path: "".into(),
+    })
+}
+
 // Helper function to normalize line endings in a byte vector
 pub fn normalize_line_endings(bytes: &[u8]) -> String {
     let s = str::from_utf8(bytes).expect("Invalid UTF-8 in WritableFile content");
@@ -247,6 +267,24 @@ impl Weaver {
             tasks.push(doc_task);
         }
 
+        let public_copy_task = tokio::spawn(async move {
+            let config = Arc::clone(&config_arc);
+            let folder_name = config
+                .public_dir
+                .clone()
+                .split('/')
+                .next_back()
+                .unwrap()
+                .to_string();
+            let target = format!("{}/{}", config.build_dir.clone(), folder_name);
+
+            println!("Copying {} to {}", config.public_dir.clone(), &target);
+
+            copy_dir_all(config.public_dir.clone(), target)
+        });
+
+        tasks.push(public_copy_task);
+
         let render_results: Vec<Result<Result<WritableFile, BuildError>, tokio::task::JoinError>> =
             join_all(tasks).await; // Await all rendering tasks
 
@@ -255,7 +293,9 @@ impl Weaver {
             match join_result {
                 Ok(render_result) => match render_result {
                     Ok(writable_file) => {
-                        self.write_result_to_system(writable_file).await?;
+                        if writable_file.path.as_os_str() != "" {
+                            self.write_result_to_system(writable_file).await?;
+                        }
                     }
                     Err(render_error) => {
                         eprintln!("Rendering error: {}", render_error.red());
