@@ -1,6 +1,6 @@
 content_dir = "content"
 base_url = "localhost:9090"
-includes_dir = "partials"
+partials_dir = "partials"
 public_dir = "static"
 
 [image_config]

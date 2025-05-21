@@ -46,7 +46,7 @@ pub struct WeaverConfig {
     pub base_dir: String,
     pub content_dir: String,
     pub base_url: String,
-    pub includes_dir: String,
+    pub partials_dir: String,
     pub public_dir: String,
     pub template_dir: String,
     pub build_dir: String,
@@ -68,7 +68,7 @@ impl Default for WeaverConfig {
             base_dir: base_path.clone(),
             content_dir: "content".into(),
             base_url: "localhost:8080".into(),
-            includes_dir: "includes".into(),
+            partials_dir: "partials".into(),
             public_dir: "public".into(),
             build_dir: "site".into(),
             template_dir: "templates".into(),
@@ -92,7 +92,7 @@ impl WeaverConfig {
                 content_dir: format!("{}/{}", &inst.base_dir, inst.content_dir),
                 template_dir: format!("{}/{}", &inst.base_dir, inst.template_dir),
                 base_url: inst.base_url,
-                includes_dir: format!("{}/{}", &inst.base_dir, inst.includes_dir),
+                partials_dir: format!("{}/{}", &inst.base_dir, inst.partials_dir),
                 public_dir: format!("{}/{}", &inst.base_dir, inst.public_dir),
                 build_dir: format!("{}/{}", &inst.base_dir, inst.build_dir),
                 templating_language: TemplateLang::Liquid,
@@ -111,9 +111,9 @@ impl WeaverConfig {
                 &user_supplied_config.base_dir, user_supplied_config.content_dir
             ),
             base_url: user_supplied_config.base_url,
-            includes_dir: format!(
+            partials_dir: format!(
                 "{}/{}",
-                &user_supplied_config.base_dir, user_supplied_config.includes_dir
+                &user_supplied_config.base_dir, user_supplied_config.partials_dir
             ),
             public_dir: format!(
                 "{}/{}",
@@ -150,7 +150,7 @@ impl WeaverConfig {
             base_dir: safe_path.to_string(),
             content_dir: format!("{}/{}", &safe_path, user_supplied_config.content_dir),
             base_url: user_supplied_config.base_url,
-            includes_dir: format!("{}/{}", &safe_path, user_supplied_config.includes_dir),
+            partials_dir: format!("{}/{}", &safe_path, user_supplied_config.partials_dir),
             public_dir: format!("{}/{}", &safe_path, user_supplied_config.public_dir),
             build_dir: format!("{}/{}", &safe_path, user_supplied_config.build_dir),
             template_dir: format!("{}/{}", &safe_path, user_supplied_config.template_dir),
@@ -179,7 +179,7 @@ mod test {
 
         assert_eq!(config.base_dir, base_path);
         assert_eq!(config.content_dir, format!("{}/content", base_path));
-        assert_eq!(config.includes_dir, format!("{}/includes", base_path));
+        assert_eq!(config.partials_dir, format!("{}/partials", base_path));
         assert_eq!(config.public_dir, format!("{}/public", base_path));
         assert_eq!(config.build_dir, format!("{}/site", base_path));
         assert_eq!(config.base_url, "localhost:8080");
@@ -199,7 +199,7 @@ mod test {
 
         assert_eq!(config.base_dir, base_path);
         assert_eq!(config.content_dir, format!("{}/content", base_path));
-        assert_eq!(config.includes_dir, format!("{}/includes", base_path));
+        assert_eq!(config.partials_dir, format!("{}/partials", base_path));
         assert_eq!(config.public_dir, format!("{}/public", base_path));
         assert_eq!(config.build_dir, format!("{}/site", base_path));
         assert_eq!(config.base_url, "localhost:8080");
@@ -213,7 +213,7 @@ mod test {
 
         assert_eq!(config.base_dir, base_path);
         assert_eq!(config.content_dir, format!("{}/content", base_path));
-        assert_eq!(config.includes_dir, format!("{}/partials", base_path));
+        assert_eq!(config.partials_dir, format!("{}/partials", base_path));
         assert_eq!(config.public_dir, format!("{}/static", base_path));
         assert_eq!(config.build_dir, format!("{}/site", base_path));
         assert_eq!(config.base_url, "localhost:9090");
@@ -230,7 +230,7 @@ mod test {
 
         assert_eq!(config.base_dir, base_path);
         assert_eq!(config.content_dir, format!("{}/content", base_path));
-        assert_eq!(config.includes_dir, format!("{}/partials", base_path));
+        assert_eq!(config.partials_dir, format!("{}/partials", base_path));
         assert_eq!(config.public_dir, format!("{}/static", base_path));
         assert_eq!(config.build_dir, format!("{}/site", base_path));
         assert_eq!(config.base_url, "localhost:8080");

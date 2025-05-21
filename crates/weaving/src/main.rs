@@ -57,7 +57,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Build { path } => {
             let mut instance = Weaver::new(fs::canonicalize(path.resolve())?);
 
-            instance.scan_content().scan_templates().build().await?;
+            instance
+                .scan_content()
+                .scan_templates()
+                .scan_partials()
+                .build()
+                .await?;
         }
         Commands::New {
             path,
@@ -87,7 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     r#"version = 1
 content_dir = "content"
 base_url = "localhost:8080"
-includes_dir = "includes"
+partials_dir = "partials"
 public_dir = "public"
 build_dir = "site"
 template_dir = "templates"
@@ -110,7 +115,12 @@ address = "localhost:8080"
 
             println!("{}", "building".green());
             let mut instance = Weaver::new(fs::canonicalize(path.resolve())?);
-            instance.scan_content().scan_templates().build().await?;
+            instance
+                .scan_content()
+                .scan_templates()
+                .scan_partials()
+                .build()
+                .await?;
 
             let address = instance.config.serve_config.address.clone();
 
@@ -152,8 +162,12 @@ address = "localhost:8080"
 
                                 if !skip_build {
                                     println!("{:#?} changed, rebuilding.", e.paths.green());
-                                    let build_result =
-                                        instance.scan_content().scan_templates().build().await;
+                                    let build_result = instance
+                                        .scan_content()
+                                        .scan_templates()
+                                        .scan_partials()
+                                        .build()
+                                        .await;
 
                                     match build_result {
                                         Ok(_) => {

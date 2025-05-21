@@ -1,2 +1,2 @@
-includes_dir = "partials"
+partials_dir = "partials"
 public_dir = "static"

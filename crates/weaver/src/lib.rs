@@ -4,6 +4,7 @@ use futures::future::join_all;
 use glob::glob;
 use liquid::model::KString;
 use owo_colors::OwoColorize;
+use partial::Partial;
 use renderers::{
     ContentRenderer, MarkdownRenderer, WritableFile,
     globals::{LiquidGlobals, LiquidGlobalsPage},
@@ -20,6 +21,7 @@ use tokio::sync::Mutex;
 pub mod config;
 pub mod document;
 pub mod filters;
+pub mod partial;
 pub mod renderers;
 pub mod routes;
 pub mod template;
@@ -72,6 +74,7 @@ pub struct Weaver {
     pub routes: Vec<String>,
     pub templates: Vec<Arc<Mutex<Template>>>,
     pub documents: Vec<Arc<Mutex<Document>>>,
+    pub partials: Vec<Partial>,
     all_documents_by_route: HashMap<KString, Arc<Mutex<Document>>>,
 }
 
@@ -82,6 +85,7 @@ impl Weaver {
             tags: vec![],
             routes: vec![],
             templates: vec![],
+            partials: vec![],
             documents: vec![],
             all_documents_by_route: HashMap::new(),
         }
@@ -107,6 +111,34 @@ impl Weaver {
                         .insert(KString::from(route), doc_arc_mutex);
                 }
                 Err(e) => panic!("{:?}", e),
+            }
+        }
+
+        self
+    }
+
+    pub fn scan_partials(&mut self) -> &mut Self {
+        let extension = match self.config.templating_language {
+            TemplateLang::Liquid => ".liquid",
+        };
+        println!(
+            "Searching for {} templates in {}",
+            &extension, &self.config.partials_dir
+        );
+        for entry in glob(format!("{}/**/*{}", self.config.partials_dir, extension).as_str())
+            .expect("Failed to read glob pattern")
+        {
+            match entry {
+                Ok(pathbuf) => {
+                    println!(
+                        "Found partial {}, registering {}",
+                        pathbuf.display(),
+                        pathbuf.file_name().unwrap().to_string_lossy()
+                    );
+                    let partial = Partial::new_from_path(pathbuf);
+                    self.partials.push(partial);
+                }
+                Err(e) => panic!("{:?}", e), // Panics on glob iteration error
             }
         }
 
@@ -190,6 +222,7 @@ impl Weaver {
 
         let templates_arc = Arc::new(self.templates.clone());
         let config_arc = Arc::clone(&self.config);
+        let partials_arc = Arc::new(self.partials.clone());
 
         let mut tasks = vec![];
 
@@ -202,11 +235,13 @@ impl Weaver {
 
             let templates = Arc::clone(&templates_arc);
             let config = Arc::clone(&config_arc);
+            let partials = Arc::clone(&partials_arc);
 
             let doc_task = tokio::spawn(async move {
-                let md_renderer = MarkdownRenderer::new(document_arc, templates, config);
+                let md_renderer =
+                    MarkdownRenderer::new(document_arc, templates, config, partials.to_vec());
 
-                md_renderer.render(&mut globals).await
+                md_renderer.render(&mut globals, partials.to_vec()).await
             });
 
             tasks.push(doc_task);

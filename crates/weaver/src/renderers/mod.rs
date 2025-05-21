@@ -2,6 +2,7 @@ pub mod globals;
 use async_trait::async_trait;
 use futures::StreamExt;
 use globals::LiquidGlobals;
+use liquid::partials::{EagerCompiler, InMemorySource};
 use markdown::CompileOptions;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -13,6 +14,7 @@ use tokio::sync::Mutex;
 use crate::config::TemplateLang;
 use crate::document::Heading;
 use crate::filters::raw_html::RawHtml;
+use crate::partial::Partial;
 use crate::routes::route_from_path;
 use crate::template::Template;
 use crate::{BuildError, document::Document};
@@ -25,7 +27,11 @@ pub struct WritableFile {
 
 #[async_trait]
 pub trait ContentRenderer {
-    async fn render(&self, data: &mut LiquidGlobals) -> Result<WritableFile, BuildError>;
+    async fn render(
+        &self,
+        data: &mut LiquidGlobals,
+        partials: Vec<Partial>,
+    ) -> Result<WritableFile, BuildError>;
 }
 
 fn out_path_for_document(document: &Document, weaver_config: &Arc<crate::WeaverConfig>) -> PathBuf {
@@ -49,7 +55,11 @@ pub enum TemplateRenderer<'a> {
 
 #[async_trait]
 impl<'a> ContentRenderer for TemplateRenderer<'a> {
-    async fn render(&self, data: &mut LiquidGlobals) -> Result<WritableFile, BuildError> {
+    async fn render(
+        &self,
+        data: &mut LiquidGlobals,
+        _partials: Vec<Partial>,
+    ) -> Result<WritableFile, BuildError> {
         match self {
             Self::LiquidBuilder {
                 liquid_parser,
@@ -83,10 +93,18 @@ impl<'a> TemplateRenderer<'a> {
         template: Arc<Mutex<crate::Template>>,
         for_document: &'a Document,
         weaver_config: Arc<crate::WeaverConfig>,
+        partials: Vec<Partial>,
     ) -> Self {
+        let mut registered_partials = EagerCompiler::<InMemorySource>::empty();
+
+        for partial in partials {
+            registered_partials.add(partial.name, partial.contents);
+        }
+
         Self::LiquidBuilder {
             liquid_parser: liquid::ParserBuilder::with_stdlib()
                 .filter(RawHtml)
+                .partials(registered_partials)
                 .build()
                 .unwrap(),
             weaver_template: template.clone(),
@@ -100,11 +118,20 @@ pub struct MarkdownRenderer {
     document: Arc<Mutex<Document>>,
     templates: Arc<Vec<Arc<Mutex<crate::Template>>>>,
     weaver_config: Arc<crate::WeaverConfig>,
+    partials: Vec<Partial>,
 }
 
+// This renderer is strange for several reasons, the way it works is as follows.
+// 1. do a pass to gather the headings in the document
+// 2. do a pass over the template.
+// 3. do a pass over the markdown to get html from the
 #[async_trait]
 impl ContentRenderer for MarkdownRenderer {
-    async fn render(&self, data: &mut LiquidGlobals) -> Result<WritableFile, BuildError> {
+    async fn render(
+        &self,
+        data: &mut LiquidGlobals,
+        partials: Vec<Partial>,
+    ) -> Result<WritableFile, BuildError> {
         let mut doc_guard = self.document.lock().await;
         let template = self
             .find_template_by_string(doc_guard.metadata.template.clone())
@@ -120,11 +147,11 @@ impl ContentRenderer for MarkdownRenderer {
             Arc::new(Mutex::new(templated_md_html)),
             &doc_guard,
             self.weaver_config.clone(),
+            self.partials.clone(),
         );
         let body_html = body_template_renderer
-            .render(&mut data.to_owned())
-            .await
-            .unwrap();
+            .render(&mut data.to_owned(), partials.clone())
+            .await?;
 
         let markdown_html = markdown::to_html_with_options(
             body_html.contents.as_str(),
@@ -138,11 +165,17 @@ impl ContentRenderer for MarkdownRenderer {
         )
         .expect("failed to render markdown to html");
 
-        let template_renderer =
-            TemplateRenderer::new(template.clone(), &doc_guard, self.weaver_config.clone());
+        let template_renderer = TemplateRenderer::new(
+            template.clone(),
+            &doc_guard,
+            self.weaver_config.clone(),
+            partials.clone(),
+        );
         data.page.body = markdown_html;
 
-        template_renderer.render(&mut data.to_owned()).await
+        template_renderer
+            .render(&mut data.to_owned(), partials)
+            .await
     }
 }
 
@@ -151,11 +184,13 @@ impl MarkdownRenderer {
         document: Arc<Mutex<Document>>,
         templates: Arc<Vec<Arc<Mutex<crate::Template>>>>,
         weaver_config: Arc<crate::WeaverConfig>,
+        partials: Vec<Partial>,
     ) -> Self {
         Self {
             document,
             templates,
             weaver_config,
+            partials,
         }
     }
 
@@ -261,8 +296,12 @@ mod test {
         let doc_arc =
             Document::new_from_path(format!("{}/content/with_headings.md", base_path).into());
         let config = Arc::new(WeaverConfig::new_from_path(base_path.clone().into()));
-        let renderer =
-            TemplateRenderer::new(Arc::new(Mutex::new(template)), &doc_arc, config.clone());
+        let renderer = TemplateRenderer::new(
+            Arc::new(Mutex::new(template)),
+            &doc_arc,
+            config.clone(),
+            vec![],
+        );
 
         let mut data = LiquidGlobals::new(
             Arc::new(Mutex::new(Document::new_from_path(
@@ -287,7 +326,7 @@ mod test {
                 .into(),
                 path: format!("{}/site/with_headings/index.html", base_path).into(),
             },
-            renderer.render(&mut data).await.unwrap()
+            renderer.render(&mut data, vec![]).await.unwrap()
         );
     }
 
@@ -300,7 +339,8 @@ mod test {
         )));
         let config_path = format!("{}/test_fixtures/config/custom_config", base_path_wd);
         let config = Arc::new(WeaverConfig::new_from_path(config_path.clone().into()));
-        let renderer = MarkdownRenderer::new(doc_arc.clone(), vec![].into(), config.clone());
+        let renderer =
+            MarkdownRenderer::new(doc_arc.clone(), vec![].into(), config.clone(), vec![]);
 
         assert_eq!(
             vec![
@@ -355,10 +395,11 @@ mod test {
             doc_arc.clone(),
             vec![Arc::new(Mutex::new(template))].into(),
             config.clone(),
+            vec![],
         );
 
         let mut data = LiquidGlobals::new(doc_arc, &Arc::new(HashMap::new())).await;
-        let result = renderer.render(&mut data).await;
+        let result = renderer.render(&mut data, vec![]).await;
 
         assert_eq!(
             WritableFile {
