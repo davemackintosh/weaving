@@ -1,16 +1,21 @@
 use clap::{Parser, Subcommand};
+use crossbeam_channel::{Receiver, Sender, unbounded};
 use futures::future::join_all;
 use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use owo_colors::OwoColorize;
 use resolve_path::PathResolveExt;
-use rouille::Response;
+use rouille::websocket;
+use routes::{serve_catchall, serve_index, serve_service_worker, serve_websocket};
 use std::{
-    fs, io,
+    fs,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 use template::{Templates, get_new_site};
+use tokio::sync::Mutex;
 use weaver_lib::Weaver;
 
+pub mod routes;
 pub mod template;
 
 #[derive(Parser)]
@@ -49,6 +54,9 @@ enum Commands {
     },
 }
 
+// Type alias for our WebSocket client list
+type WsClients = Arc<Mutex<Vec<Sender<websocket::Message>>>>;
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
@@ -81,7 +89,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .expect("failed to create your new site, sorry about that.");
         }
         Commands::Config { path, force } => {
-            // Check if there is a config file or not and then check the force flag.
             let target_path = fs::canonicalize(path.resolve())?;
             let config_exists =
                 fs::exists(format!("{}/weaving.toml", &target_path.display())).unwrap();
@@ -130,10 +137,45 @@ address = "localhost:8080"
                 &address.green()
             );
 
+            // --- WebSocket setup ---
+            let clients: WsClients = Arc::new(Mutex::new(Vec::new()));
+            let clients_clone = clients.clone(); // For HTTP server thread
+            let clients_broadcast = clients.clone(); // For broadcasting thread
+
+            let (file_change_tx, file_change_rx): (Sender<String>, Receiver<String>) = unbounded();
+            let file_change_tx_for_watcher = file_change_tx.clone(); // For watcher thread
+
+            // WebSocket broadcasting task (using tokio::spawn)
+            serve_tasks.push(tokio::spawn(async move {
+                for message in file_change_rx {
+                    let mut disconnected_clients = Vec::new();
+                    let mut clients_lock = clients_broadcast.lock().await;
+
+                    for (i, client_tx) in clients_lock.iter().enumerate() {
+                        let Err(_) = client_tx.send(websocket::Message::Text(message.clone()))
+                        else {
+                            continue;
+                        };
+                        disconnected_clients.push(i);
+                    }
+
+                    for &i in disconnected_clients.iter().rev() {
+                        clients_lock.remove(i);
+                    }
+                    println!(
+                        "[WebSocket Broadcaster] Broadcasted '{}' to {} clients",
+                        message.yellow(),
+                        clients_lock.len()
+                    );
+                }
+            }));
+            // --- End WebSocket setup ---
+
             let watch_path = safe_path.clone();
 
-            // Watch files for changes.
+            // Watch files for changes task (using tokio::spawn)
             serve_tasks.push(tokio::spawn(async move {
+                // Changed to tokio::spawn(async move { ... })
                 let (tx, rx) = std::sync::mpsc::channel();
                 let mut watcher = RecommendedWatcher::new(tx, Config::default()).unwrap();
                 watcher
@@ -146,16 +188,21 @@ address = "localhost:8080"
                     match res {
                         Ok(e) => match e.kind {
                             EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_) => {
-                                // Should probably add excludes to config to ignore things like
-                                // node_modules but for now, ignore the build dir and git.
                                 let skip_build = e.paths.iter().any(|p| {
-                                    p.starts_with(instance.config.build_dir.clone())
+                                    p.starts_with(&instance.config.build_dir)
                                         || p.ends_with("~")
                                         || p.components().any(|c| {
                                             if let std::path::Component::Normal(os_str) = c {
-                                                os_str == ".git"
+                                                instance
+                                                    .config
+                                                    .serve_config
+                                                    .watch_excludes
+                                                    .iter()
+                                                    .any(|exclude| {
+                                                        os_str.to_str().unwrap() == exclude.as_str()
+                                                    })
                                             } else {
-                                                false // Only check Normal components
+                                                false
                                             }
                                         })
                                 });
@@ -167,11 +214,16 @@ address = "localhost:8080"
                                         .scan_templates()
                                         .scan_partials()
                                         .build()
-                                        .await;
+                                        .await; // This await needs tokio runtime
 
                                     match build_result {
                                         Ok(_) => {
                                             println!("{}", "Built successfully".blue());
+                                            if let Err(err) = file_change_tx_for_watcher
+                                                .send("reload".to_string())
+                                            {
+                                                eprintln!("Error sending reload message: {}", err);
+                                            }
                                         }
                                         Err(err) => {
                                             eprintln!(
@@ -190,51 +242,20 @@ address = "localhost:8080"
                 }
             }));
 
-            // HTTP server task.
+            // We need to pass the current tokio handle down to the websocket handler.
+            let tokio_runtime_handle = tokio::runtime::Handle::current();
+
+            // HTTP server task (using tokio::spawn)
             serve_tasks.push(tokio::spawn(async move {
+                let server_tokio_handle = tokio_runtime_handle.clone();
                 rouille::start_server(address, move |request| {
-                    let req_path = request.url();
-                    let instance = Weaver::new(safe_path.clone());
-                    println!(
-                        "Received {} request for: {}",
-                        request.method().blue(),
-                        req_path.yellow()
-                    );
+                    let request_tokio_handle = server_tokio_handle.clone();
 
-                    let sanitized_req_path = sanitize_path(&req_path);
-
-                    let mut file_path = format!(
-                        "{}/{}",
-                        instance.config.build_dir,
-                        &sanitized_req_path.display()
-                    );
-
-                    // If the request is for a directory (ends with / or is the root /)
-                    // append index.html
-                    if req_path.ends_with('/') || req_path == "/" {
-                        file_path = format!("{}/index.html", file_path);
-                    }
-
-                    println!("Serving: {:?}", &file_path.green());
-
-                    match fs::read(&file_path) {
-                        Ok(content) => {
-                            let mime_type =
-                                mime_guess::from_path(&file_path).first_or_octet_stream();
-
-                            Response::from_data(mime_type.to_string(), content)
-                        }
-                        Err(err) => {
-                            // Handle file system errors
-                            let status = match err.kind() {
-                                io::ErrorKind::NotFound => 404,
-                                _ => 500,
-                            };
-
-                            eprintln!("Error reading file {:?}: {}", file_path.yellow(), err.red());
-                            Response::text(format!("Error: {}", err)).with_status_code(status)
-                        }
-                    }
+                    rouille::router!(request,
+                        (GET) ["/service-worker.js"] => serve_service_worker(&safe_path),
+                        (GET) ["/ws"] => serve_websocket(request, clients_clone.clone(), request_tokio_handle),
+                        _ => serve_catchall(&safe_path, request)
+                    )
                 });
             }));
 
@@ -245,23 +266,14 @@ address = "localhost:8080"
     Ok(())
 }
 
-// Helper function to sanitize the requested path to prevent directory traversal
-// This function remains the same as it's file-system path sanitization logic.
 fn sanitize_path(req_path: &str) -> PathBuf {
-    // Start with an empty path
     let mut sanitized = PathBuf::new();
-
-    // Iterate over path components
     for component in Path::new(req_path).components() {
         use std::path::Component;
         match component {
-            // Ignore "." components
             Component::CurDir => {}
-            // Ignore ".." components to prevent moving up directories
             Component::ParentDir => {}
-            // Add normal directory or file names
             Component::Normal(os_str) => sanitized.push(os_str),
-            // Ignore root or prefix components
             Component::RootDir | Component::Prefix(_) => {}
         }
     }
