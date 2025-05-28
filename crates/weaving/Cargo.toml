@@ -9,7 +9,7 @@ categories = ["command-line-utilities", "web-programming"]
 repository = "https://github.com/davemackintosh/weaving/"
 
 [dependencies]
-weaver-lib = { path = "../weaver", version = "0.1.0" }
+weaver-lib = { path = "../weaver", version = "0.2.0" }
 tokio = { version = "1.45.0", features = [
 	"sync",
 	"rt",
