@@ -1938,7 +1938,7 @@ dependencies = [
 
 [[package]]
 name = "weaver-lib"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "async-trait",
  "futures",
@@ -1958,7 +1958,7 @@ dependencies = [
 
 [[package]]
 name = "weaving"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "clap",
  "crossbeam-channel",

@@ -73,10 +73,6 @@ impl Document {
 
         let base_metadata = base_metadata_opt.unwrap();
 
-        if base_metadata.title.is_empty() {
-            panic!("title is required in your frontmatter!");
-        }
-
         Self {
             at_path: path.display().to_string(),
             metadata: base_metadata,
