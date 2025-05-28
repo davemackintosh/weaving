@@ -163,6 +163,15 @@ pub fn serve_catchall(safe_path: &Path, request: &Request) -> Response {
                 _ => 500,
             };
 
+            // If there's a custom 404 page, render that instead.
+            if status == 404
+                && !req_path.starts_with("/404")
+                && fs::exists(format!("{}/404.md", instance.config.content_dir)).unwrap()
+            {
+                let new_request = Request::fake_http("GET", "/404", vec![], vec![]);
+                return serve_catchall(safe_path, &new_request);
+            }
+
             eprintln!("Error reading file {:?}: {}", file_path.yellow(), err.red());
             Response::text(format!("Error: {}", err)).with_status_code(status)
         }
