@@ -265,7 +265,7 @@ address = "localhost:8080"
     Ok(())
 }
 
-fn sanitize_path(req_path: &str) -> PathBuf {
+fn sanitize_path(req_path: &str, with_root: bool) -> PathBuf {
     let mut sanitized = PathBuf::new();
     for component in Path::new(req_path).components() {
         use std::path::Component;
@@ -276,5 +276,10 @@ fn sanitize_path(req_path: &str) -> PathBuf {
             Component::RootDir | Component::Prefix(_) => {}
         }
     }
-    sanitized
+
+    if with_root {
+        format!("/{}", sanitized.display()).into()
+    } else {
+        sanitized
+    }
 }

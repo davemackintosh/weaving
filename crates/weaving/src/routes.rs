@@ -123,26 +123,30 @@ pub fn serve_catchall(safe_path: &Path, request: &Request) -> Response {
         req_path.yellow()
     );
 
-    let sanitized_req_path = sanitize_path(&req_path);
+    let sanitized_req_path = sanitize_path(&req_path, false);
+    let public_root = instance
+        .config
+        .public_dir
+        .strip_prefix(&instance.config.base_dir)
+        .unwrap();
 
-    let mut file_path = format!(
-        "{}/{}",
-        instance.config.build_dir,
-        &sanitized_req_path.display()
+    let mut file_path = sanitize_path(
+        format!(
+            "/{}/{}",
+            instance.config.build_dir,
+            &sanitized_req_path.display()
+        )
+        .as_str(),
+        true,
     );
 
-    if req_path.ends_with('/') || req_path == "/" {
-        file_path = format!("{}index.html", file_path);
-    } else if !req_path.starts_with(
-        instance
-            .config
-            .public_dir
-            .strip_prefix(&instance.config.base_dir)
-            .unwrap(),
-    ) && !req_path.ends_with(".html")
-    {
-        file_path = format!("{}/index.html", file_path);
-    }
+    file_path = if req_path.ends_with('/') || req_path == "/" {
+        format!("{}/index.html", file_path.display()).into()
+    } else if req_path.starts_with(public_root) {
+        file_path
+    } else {
+        format!("{}/index.html", file_path.display()).into()
+    };
 
     println!("Serving: {:?}", &file_path.green());
     let serve_address = instance.config.serve_config.address.clone();
@@ -158,6 +162,7 @@ pub fn serve_catchall(safe_path: &Path, request: &Request) -> Response {
             Response::from_data(mime_type.to_string(), content)
         }
         Err(err) => {
+            eprintln!("Error reading file {:?}: {}", file_path.yellow(), err.red());
             let status = match err.kind() {
                 io::ErrorKind::NotFound => 404,
                 _ => 500,
@@ -172,7 +177,6 @@ pub fn serve_catchall(safe_path: &Path, request: &Request) -> Response {
                 return serve_catchall(safe_path, &new_request);
             }
 
-            eprintln!("Error reading file {:?}: {}", file_path.yellow(), err.red());
             Response::text(format!("Error: {}", err)).with_status_code(status)
         }
     }
