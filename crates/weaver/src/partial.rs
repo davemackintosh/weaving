@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use regex::RegexBuilder;
 use serde::{Deserialize, Serialize};
 
 use crate::normalize_line_endings;
@@ -20,7 +21,13 @@ impl Partial {
             panic!("failed to read '{}'", path.display());
         }
 
-        let contents = normalize_line_endings(contents_result.as_ref().unwrap().as_bytes());
+        let re = RegexBuilder::new(r"<([a-zA-Z][a-zA-Z0-9]*)([^>]*)>")
+            .case_insensitive(true)
+            .build()
+            .expect("Failed to compile regex for HTML tags");
+
+        let original_content = normalize_line_endings(contents_result.as_ref().unwrap().as_bytes());
+        let contents = re.replace_all(&original_content, "$0\n").to_string();
 
         Self {
             at_path: path.display().to_string(),

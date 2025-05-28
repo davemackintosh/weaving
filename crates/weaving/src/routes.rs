@@ -131,8 +131,26 @@ pub fn serve_catchall(safe_path: &Path, request: &Request) -> Response {
         &sanitized_req_path.display()
     );
 
+    dbg!(
+        "{}",
+        &instance
+            .config
+            .public_dir
+            .strip_prefix(&instance.config.base_dir)
+            .unwrap()
+    );
+
     if req_path.ends_with('/') || req_path == "/" {
         file_path = format!("{}index.html", file_path);
+    } else if !req_path.starts_with(
+        instance
+            .config
+            .public_dir
+            .strip_prefix(&instance.config.base_dir)
+            .unwrap(),
+    ) && !req_path.ends_with(".html")
+    {
+        file_path = format!("{}/index.html", file_path);
     }
 
     println!("Serving: {:?}", &file_path.green());

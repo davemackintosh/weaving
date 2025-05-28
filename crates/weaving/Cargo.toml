@@ -1,6 +1,6 @@
 [package]
 name = "weaving"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 license-file = "../../LICENSE"
 description = "static site generator weaving binary"
@@ -9,7 +9,7 @@ categories = ["command-line-utilities", "web-programming"]
 repository = "https://github.com/davemackintosh/weaving/"
 
 [dependencies]
-weaver-lib = { path = "../weaver", version = "0.2.0" }
+weaver-lib = { path = "../weaver", version = "0.2.1" }
 tokio = { version = "1.45.0", features = [
 	"sync",
 	"rt",

@@ -61,15 +61,14 @@ impl Document {
         let matter = Matter::<YAML>::new();
         let parseable = normalize_line_endings(contents_result.as_ref().unwrap().as_bytes());
         let parse_result = matter.parse(&parseable);
-        let base_metadata_opt = parse_result
-            .data
-            .as_ref()
-            .unwrap()
-            .deserialize::<BaseMetaData>();
+        let base_metadata_opt = match parse_result.data {
+            Some(data) => data.deserialize::<BaseMetaData>(),
+            None => Ok(BaseMetaData::default()),
+        };
 
         if base_metadata_opt.is_err() {
             dbg!("error parsing: {}", base_metadata_opt.err());
-            panic!("Failed to parse the frontmatter in {}", path.display());
+            return Self::default();
         }
 
         let base_metadata = base_metadata_opt.unwrap();
