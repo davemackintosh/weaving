@@ -36,3 +36,18 @@ impl Partial {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_partial_whitespace() {
+        let base_path_wd = std::env::current_dir().unwrap().display().to_string();
+        let base_path = format!("{}/test_fixtures/liquid/partials", base_path_wd);
+        let partial = Partial::new_from_path(format!("{}/test.liquid", base_path).into());
+
+        assert_eq!("<div>\n\n\ttest\n</div>\n", partial.contents,);
+    }
+}

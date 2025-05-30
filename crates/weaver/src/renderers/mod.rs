@@ -435,10 +435,8 @@ mod test {
 		</main>
 	</body>
 </html>
-
 "#
-                )
-                .into(),
+                ),
                 path: format!("{}/site/with_headings/index.html", base_path).into(),
                 emit: true,
             },
