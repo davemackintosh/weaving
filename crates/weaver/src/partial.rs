@@ -31,7 +31,7 @@ impl Partial {
 
         Self {
             at_path: path.display().to_string(),
-            name: path.file_name().unwrap().display().to_string(),
+            name: path.file_name().unwrap().to_string_lossy().to_string(),
             contents,
         }
     }

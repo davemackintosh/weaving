@@ -23,6 +23,7 @@ use crate::{BuildError, document::Document};
 pub struct WritableFile {
     pub contents: String,
     pub path: PathBuf,
+    pub emit: bool,
 }
 
 #[async_trait]
@@ -77,6 +78,7 @@ impl<'a> ContentRenderer for TemplateRenderer<'a> {
                     Ok(result) => Ok(WritableFile {
                         contents: result,
                         path: out_path_for_document(for_document, weaver_config),
+                        emit: for_document.emit,
                     }),
                     Err(err) => {
                         dbg!("Template rendering error {:#?}", &err);
@@ -325,6 +327,7 @@ mod test {
                 )
                 .into(),
                 path: format!("{}/site/with_headings/index.html", base_path).into(),
+                emit: true,
             },
             renderer.render(&mut data, vec![]).await.unwrap()
         );
@@ -436,7 +439,8 @@ mod test {
 "#
                 )
                 .into(),
-                path: format!("{}/site/with_headings/index.html", base_path).into()
+                path: format!("{}/site/with_headings/index.html", base_path).into(),
+                emit: true,
             },
             result.unwrap()
         );

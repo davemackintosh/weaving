@@ -82,8 +82,11 @@ impl LiquidGlobals {
                 let f_path = first_component.unwrap();
                 match content_map.contains_key(&f_path) {
                     true => {
-                        let content_inner_map = content_map.get_mut(&f_path).unwrap();
-                        content_inner_map.insert(route.clone(), doc_arc_mutex.clone());
+                        // Don't include the "list" page in the content list.
+                        if route.clone() != format!("/{}/", f_path) {
+                            let content_inner_map = content_map.get_mut(&f_path).unwrap();
+                            content_inner_map.insert(route.clone(), doc_arc_mutex.clone());
+                        }
                     }
                     false => {
                         content_map.insert(
@@ -135,6 +138,7 @@ mod tests {
                 title: title.to_string(),
                 ..Default::default()
             },
+            emit: true,
             html: body.map(|s| s.to_string()),
             markdown: String::new(),
             toc: vec![],
