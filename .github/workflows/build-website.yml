@@ -33,11 +33,10 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - uses: Swatinem/rust-cache@v2
-      - name: cargo action
-        uses: ClementTsang/cargo-action@v0.0.6
-        with:
-          command: install
-          args: --path ./crates/weaving
+      - name: update toolchain
+        run: rustup update stable
+      - name: install weaving
+        run: cargo install --path ./crates/weaving
       - name: Generate site
         run: weaving build -p ./github-pages/
       - name: Upload artifact
