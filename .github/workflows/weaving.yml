@@ -114,7 +114,7 @@ jobs:
           pip install meson
 
       - name: test
-        run: cargo test 
+        run: cargo test
 
   lint:
     name: lint
