@@ -80,15 +80,16 @@ impl Default for WeaverConfig {
 }
 
 impl WeaverConfig {
-    pub fn new() -> Self {
+    pub fn new(base_dir: PathBuf) -> Self {
         let inst = Self::default();
 
-        let config_file_result = std::fs::read_to_string(format!("{}/weaving.toml", inst.base_dir));
+        let config_file_result =
+            std::fs::read_to_string(format!("{}/weaving.toml", base_dir.display()));
 
         if config_file_result.is_err() {
             return Self {
                 version: "1".into(),
-                base_dir: inst.base_dir.clone(),
+                base_dir: base_dir.display().to_string(),
                 content_dir: format!("{}/{}", &inst.base_dir, inst.content_dir),
                 template_dir: format!("{}/{}", &inst.base_dir, inst.template_dir),
                 base_url: inst.base_url,
@@ -139,7 +140,7 @@ impl WeaverConfig {
         let config_file_result = std::fs::read_to_string(format!("{}/weaving.toml", safe_path));
 
         if config_file_result.is_err() {
-            return Self::new();
+            return Self::new(safe_path.into());
         }
 
         let user_supplied_config: WeaverConfig =
@@ -175,7 +176,7 @@ mod test {
             .to_str()
             .unwrap()
             .to_string();
-        let config = WeaverConfig::new();
+        let config = WeaverConfig::new(base_path.clone().into());
 
         assert_eq!(config.base_dir, base_path);
         assert_eq!(config.content_dir, format!("{}/content", base_path));

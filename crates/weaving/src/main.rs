@@ -62,6 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match args.cmd {
         Commands::Build { path } => {
+            println!("{}", fs::canonicalize(path.resolve())?.to_string_lossy());
             let mut instance = Weaver::new(fs::canonicalize(path.resolve())?);
 
             instance
