@@ -81,7 +81,7 @@ jobs:
         if: startsWith(matrix.target, 'aarch64-unknown-linux')
         run: |
           sudo apt-get -yq update
-          sudo apt-get -yq install qemu-user gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          sudo apt-get -yq install qemu-user gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6:arm64
 
       - uses: Swatinem/rust-cache@v2
 
