@@ -43,6 +43,7 @@ fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result<Writable
     Ok(WritableFile {
         contents: "".into(),
         path: "".into(),
+        emit: true,
     })
 }
 
@@ -293,7 +294,7 @@ impl Weaver {
             match join_result {
                 Ok(render_result) => match render_result {
                     Ok(writable_file) => {
-                        if writable_file.path.as_os_str() != "" {
+                        if writable_file.path.as_os_str() != "" && writable_file.emit {
                             self.write_result_to_system(writable_file).await?;
                         }
                     }

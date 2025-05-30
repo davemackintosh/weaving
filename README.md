@@ -12,7 +12,7 @@ Weaving.
 
 > I'm working on distributing across different package managers.
 
-Running `cargo install weaving` will install the `weaving` command to your system. 
+Running `cargo install weaving` will install the `weaving` command to your system.
 
 ## Usage
 
@@ -84,5 +84,3 @@ watch_excludes = [".git", "node_modules", "site"]
 npm_build = false
 address = "localhost:8080"
 ```
-
-

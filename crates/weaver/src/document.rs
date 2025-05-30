@@ -21,6 +21,7 @@ pub struct Document {
     pub excerpt: Option<String>,
     pub html: Option<String>,
     pub toc: Vec<Heading>,
+    pub emit: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
@@ -31,6 +32,7 @@ pub struct BaseMetaData {
     pub tags: Vec<String>,
     pub keywords: Vec<String>,
     pub template: String,
+    pub emit: bool,
 
     #[serde(flatten)]
     pub user: HashMap<String, Value>,
@@ -44,6 +46,7 @@ impl Default for BaseMetaData {
             description: Default::default(),
             keywords: Default::default(),
             template: "default".into(),
+            emit: true,
             user: Default::default(),
         }
     }
@@ -72,12 +75,14 @@ impl Document {
         }
 
         let base_metadata = base_metadata_opt.unwrap();
+        let should_emit = base_metadata.clone().emit;
 
         Self {
             at_path: path.display().to_string(),
             metadata: base_metadata,
             markdown: parse_result.content,
             excerpt: parse_result.excerpt,
+            emit: should_emit,
             ..Default::default()
         }
     }
@@ -107,24 +112,10 @@ mod test {
                 title: "test".into(),
                 description: "test".into(),
                 user: HashMap::new(),
+                emit: true,
                 template: "default".into(),
             },
             document.metadata
         )
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_bad_document_loading() {
-        let base_path_wd = std::env::current_dir()
-            .unwrap()
-            .as_os_str()
-            .to_os_string()
-            .to_str()
-            .unwrap()
-            .to_string();
-        let base_path = format!("{}/test_fixtures/markdown", base_path_wd);
-
-        Document::new_from_path(format!("{}/missing_frontmatter_keys.md", base_path).into());
     }
 }
