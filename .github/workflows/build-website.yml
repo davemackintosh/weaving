@@ -32,11 +32,12 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Pages
         uses: actions/configure-pages@v5
+      - uses: Swatinem/rust-cache@v2
       - name: cargo action
         uses: ClementTsang/cargo-action@v0.0.6
         with:
           command: install
-          args: weaving
+          args: -p ./crates/weaving
       - name: Generate site
         run: weaving build -p ./github-pages/
       - name: Upload artifact
