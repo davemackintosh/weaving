@@ -113,8 +113,21 @@ jobs:
           choco install -y ninja
           pip install meson
 
+      - name: build
+        run: cargo build --release
+
       - name: test
         run: cargo test
+
+      - name: upload cli binary as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: weaving binary (${{ matrix.target }})
+          path: |
+            target/${{ env.CARGO_BUILD_TARGET }}/release/weaving
+            target/${{ env.CARGO_BUILD_TARGET }}/release/weaving.exe
+          if-no-files-found: error
+          compression-level: 0
 
   lint:
     name: lint
