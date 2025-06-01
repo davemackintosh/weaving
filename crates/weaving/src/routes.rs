@@ -1,4 +1,10 @@
-use std::{any::type_name_of_val, fs, io, path::Path, sync::Arc};
+use std::{
+    any::type_name_of_val,
+    fs::{self, File},
+    io::{self, Cursor},
+    path::Path,
+    sync::Arc,
+};
 
 use crossbeam_channel::{Sender, TryRecvError, unbounded};
 use owo_colors::OwoColorize;
@@ -114,6 +120,17 @@ pub fn serve_websocket(
     }
 }
 
+fn is_probably_binary(path: String) -> std::io::Result<bool> {
+    let content = fs::read(path)?;
+    let reader = Cursor::new(content);
+
+    match bindet::detect(reader) {
+        Ok(Some(_matches)) => Ok(true),
+        Ok(None) => Ok(false),
+        Err(_e) => Ok(false),
+    }
+}
+
 pub fn serve_catchall(safe_path: &Path, request: &Request) -> Response {
     let req_path = request.url();
     let instance = Weaver::new(safe_path.to_path_buf());
@@ -150,6 +167,15 @@ pub fn serve_catchall(safe_path: &Path, request: &Request) -> Response {
 
     println!("Serving: {:?}", &file_path.green());
     let serve_address = instance.config.serve_config.address.clone();
+
+    if let Ok(_is_binary) = is_probably_binary(file_path.to_string_lossy().to_string()) {
+        let mime_type = mime_guess::from_path(&file_path).first_or_octet_stream();
+        return Response::from_file(
+            mime_type.to_string(),
+            File::open(&file_path)
+                .unwrap_or_else(|_| panic!("failed to open {} for reading.", file_path.display())),
+        );
+    }
 
     match fs::read_to_string(&file_path) {
         Ok(mut content) => {
