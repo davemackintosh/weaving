@@ -102,7 +102,7 @@ pub struct Weaver {
 impl Weaver {
     pub fn new(base_path: PathBuf) -> Self {
         Self {
-            config: Arc::new(WeaverConfig::new_from_path(base_path)),
+            config: Arc::new(WeaverConfig::new(base_path)),
             tags: vec![],
             routes: vec![],
             templates: vec![],
