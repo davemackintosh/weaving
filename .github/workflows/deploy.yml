@@ -56,11 +56,11 @@ jobs:
 
           case '${{ matrix.target }}' in
             *-windows-*)
-              cp ../LICENSE-APACHE "$ARCHIVE_NAME/LICENSE"
+              cp ../LICENSE "$ARCHIVE_NAME/LICENSE"
               cp weaving.exe "$ARCHIVE_NAME"
               zip "${ARCHIVE_NAME}.zip" "$ARCHIVE_NAME"/*;;
             *)
-              cp ../LICENSE-APACHE ../LICENSE-MIT "$ARCHIVE_NAME"
+              cp ../LICENSE "$ARCHIVE_NAME/LICENSE"
               cp weaving "$ARCHIVE_NAME"
               tar -vczf "${ARCHIVE_NAME}.tar.gz" "$ARCHIVE_NAME"/*;;
           esac
