@@ -78,83 +78,32 @@ impl Default for WeaverConfig {
         }
     }
 }
-
 impl WeaverConfig {
     pub fn new(base_dir: PathBuf) -> Self {
-        let inst = Self::default();
+        let base_dir_str = base_dir.display().to_string();
 
-        let config_file_result =
-            std::fs::read_to_string(format!("{}/weaving.toml", base_dir.display()));
+        let config_file_result = std::fs::read_to_string(format!("{}/weaving.toml", base_dir_str));
 
-        if config_file_result.is_err() {
-            return Self {
-                version: "1".into(),
-                base_dir: base_dir.display().to_string(),
-                content_dir: format!("{}/{}", &inst.base_dir, inst.content_dir),
-                template_dir: format!("{}/{}", &inst.base_dir, inst.template_dir),
-                base_url: inst.base_url,
-                partials_dir: format!("{}/{}", &inst.base_dir, inst.partials_dir),
-                public_dir: format!("{}/{}", &inst.base_dir, inst.public_dir),
-                build_dir: format!("{}/{}", &inst.base_dir, inst.build_dir),
-                templating_language: TemplateLang::Liquid,
-                image_config: inst.image_config,
-                serve_config: inst.serve_config,
-            };
-        }
-        let user_supplied_config: WeaverConfig =
-            toml::from_str(config_file_result.unwrap().as_str()).unwrap();
+        let user_supplied_config: WeaverConfig = if let Ok(config_file) = config_file_result {
+            toml::from_str(config_file.as_str()).unwrap()
+        } else {
+            Self {
+                base_dir: base_dir_str.clone(),
+                ..Default::default()
+            }
+        };
+
+        println!("{:#?}", &user_supplied_config);
 
         Self {
             version: user_supplied_config.version,
-            base_dir: user_supplied_config.base_dir.clone(),
-            content_dir: format!(
-                "{}/{}",
-                &user_supplied_config.base_dir, user_supplied_config.content_dir
-            ),
+            base_dir: base_dir_str.clone(),
+            content_dir: format!("{}/{}", &base_dir_str, user_supplied_config.content_dir),
             base_url: user_supplied_config.base_url,
-            partials_dir: format!(
-                "{}/{}",
-                &user_supplied_config.base_dir, user_supplied_config.partials_dir
-            ),
-            public_dir: format!(
-                "{}/{}",
-                &user_supplied_config.base_dir, user_supplied_config.public_dir
-            ),
-            build_dir: format!(
-                "{}/{}",
-                &user_supplied_config.base_dir, user_supplied_config.build_dir
-            ),
-            template_dir: format!(
-                "{}/{}",
-                &user_supplied_config.base_dir, user_supplied_config.template_dir
-            ),
-            templating_language: user_supplied_config.templating_language,
-            image_config: user_supplied_config.image_config,
-            serve_config: user_supplied_config.serve_config,
-        }
-    }
-
-    pub fn new_from_path(base_path: PathBuf) -> Self {
-        // Remove any trailing slash.
-        let safe_path = base_path.to_str().unwrap();
-        let config_file_result = std::fs::read_to_string(format!("{}/weaving.toml", safe_path));
-
-        if config_file_result.is_err() {
-            return Self::new(safe_path.into());
-        }
-
-        let user_supplied_config: WeaverConfig =
-            toml::from_str(config_file_result.unwrap().as_str()).unwrap();
-
-        Self {
-            version: user_supplied_config.version,
-            base_dir: safe_path.to_string(),
-            content_dir: format!("{}/{}", &safe_path, user_supplied_config.content_dir),
-            base_url: user_supplied_config.base_url,
-            partials_dir: format!("{}/{}", &safe_path, user_supplied_config.partials_dir),
-            public_dir: format!("{}/{}", &safe_path, user_supplied_config.public_dir),
-            build_dir: format!("{}/{}", &safe_path, user_supplied_config.build_dir),
-            template_dir: format!("{}/{}", &safe_path, user_supplied_config.template_dir),
+            partials_dir: format!("{}/{}", &base_dir_str, user_supplied_config.partials_dir),
+            public_dir: format!("{}/{}", &base_dir_str, user_supplied_config.public_dir),
+            build_dir: format!("{}/{}", &base_dir_str, user_supplied_config.build_dir),
+            template_dir: format!("{}/{}", &base_dir_str, user_supplied_config.template_dir),
             templating_language: user_supplied_config.templating_language,
             image_config: user_supplied_config.image_config,
             serve_config: user_supplied_config.serve_config,
@@ -196,7 +145,7 @@ mod test {
             .unwrap()
             .to_string();
         let base_path = format!("{}/test_fixtures/config/empty_config", base_path_wd);
-        let config = WeaverConfig::new_from_path(base_path.clone().into());
+        let config = WeaverConfig::new(base_path.clone().into());
 
         assert_eq!(config.base_dir, base_path);
         assert_eq!(config.content_dir, format!("{}/content", base_path));
@@ -210,7 +159,7 @@ mod test {
     fn test_with_filled_config_file() {
         let base_path_wd = std::env::current_dir().unwrap().display().to_string();
         let base_path = format!("{}/test_fixtures/config/full_config", base_path_wd);
-        let config = WeaverConfig::new_from_path(base_path.clone().into());
+        let config = WeaverConfig::new(base_path.clone().into());
 
         assert_eq!(config.base_dir, base_path);
         assert_eq!(config.content_dir, format!("{}/content", base_path));
@@ -227,7 +176,7 @@ mod test {
     fn test_with_partial_config_file() {
         let base_path_wd = std::env::current_dir().unwrap().display().to_string();
         let base_path = format!("{}/test_fixtures/config/partial_config", base_path_wd);
-        let config = WeaverConfig::new_from_path(base_path.clone().into());
+        let config = WeaverConfig::new(base_path.clone().into());
 
         assert_eq!(config.base_dir, base_path);
         assert_eq!(config.content_dir, format!("{}/content", base_path));

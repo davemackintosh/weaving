@@ -297,7 +297,7 @@ mod test {
         );
         let doc_arc =
             Document::new_from_path(format!("{}/content/with_headings.md", base_path).into());
-        let config = Arc::new(WeaverConfig::new_from_path(base_path.clone().into()));
+        let config = Arc::new(WeaverConfig::new(base_path.clone().into()));
         let renderer = TemplateRenderer::new(
             Arc::new(Mutex::new(template)),
             &doc_arc,
@@ -341,7 +341,7 @@ mod test {
             format!("{}/with_headings.md", base_path).into(),
         )));
         let config_path = format!("{}/test_fixtures/config/custom_config", base_path_wd);
-        let config = Arc::new(WeaverConfig::new_from_path(config_path.clone().into()));
+        let config = Arc::new(WeaverConfig::new(config_path.clone().into()));
         let renderer =
             MarkdownRenderer::new(doc_arc.clone(), vec![].into(), config.clone(), vec![]);
 
@@ -393,7 +393,7 @@ mod test {
         let doc_arc = Arc::new(Mutex::new(Document::new_from_path(
             format!("{}/content/with_headings.md", base_path).into(),
         )));
-        let config = Arc::new(WeaverConfig::new_from_path(base_path.clone().into()));
+        let config = Arc::new(WeaverConfig::new(base_path.clone().into()));
         let renderer = MarkdownRenderer::new(
             doc_arc.clone(),
             vec![Arc::new(Mutex::new(template))].into(),
