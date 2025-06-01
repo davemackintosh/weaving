@@ -93,8 +93,6 @@ impl WeaverConfig {
             }
         };
 
-        println!("{:#?}", &user_supplied_config);
-
         Self {
             version: user_supplied_config.version,
             base_dir: base_dir_str.clone(),

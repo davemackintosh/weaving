@@ -279,9 +279,19 @@ impl Weaver {
                 .to_string();
             let target = format!("{}/{}", config.build_dir.clone(), folder_name);
 
-            println!("Copying {} to {}", config.public_dir.clone(), &target);
+            if fs::exists(&config.public_dir)
+                .expect("failed to check if there was a public directory")
+            {
+                println!("Copying {} to {}", config.public_dir.clone(), &target);
 
-            copy_dir_all(config.public_dir.clone(), target)
+                copy_dir_all(config.public_dir.clone(), target)
+            } else {
+                Ok(WritableFile {
+                    contents: "".into(),
+                    path: "".into(),
+                    emit: false,
+                })
+            }
         });
 
         tasks.push(public_copy_task);
