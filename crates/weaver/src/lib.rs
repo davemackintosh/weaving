@@ -20,6 +20,7 @@ use tokio::sync::Mutex;
 /// content locations can vary from user to user so afford them the opportunity to do so.
 pub mod config;
 pub mod document;
+pub mod document_toc;
 pub mod filters;
 pub mod partial;
 pub mod renderers;

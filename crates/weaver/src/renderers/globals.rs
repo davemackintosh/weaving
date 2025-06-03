@@ -1,10 +1,9 @@
+use crate::document::{BaseMetaData, Heading};
 use liquid::model::KString;
 use liquid::{self};
 use serde::{Deserialize, Serialize};
 use std::path::{Component, PathBuf};
 use std::{collections::HashMap, sync::Arc};
-
-use crate::document::BaseMetaData;
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct LiquidGlobalsPage {
@@ -12,6 +11,7 @@ pub struct LiquidGlobalsPage {
     pub title: String,
     pub body: String,
     pub meta: BaseMetaData,
+    pub toc: Vec<Heading>,
     pub excerpt: Option<String>,
 }
 
@@ -26,11 +26,13 @@ impl From<&crate::Document> for LiquidGlobalsPage {
     fn from(value: &crate::Document) -> Self {
         let route_kstring = KString::from(value.at_path.clone());
 
+        println!("TOC? {:?}", &value.toc);
         Self {
             route: route_kstring,
             excerpt: value.excerpt.clone(),
             meta: value.metadata.clone(),
             body: value.html.clone().unwrap_or("".into()),
+            toc: value.toc.clone(),
             title: value.metadata.title.clone(),
         }
     }
@@ -151,6 +153,7 @@ mod tests {
             route: KString::from("/test"),
             title: "Test Page".to_string(),
             body: "<p>Test Body</p>".to_string(),
+            toc: vec![],
             meta: BaseMetaData {
                 title: "Test Meta Title".to_string(),
                 ..Default::default()
@@ -351,6 +354,7 @@ mod tests {
                 title: "Page Meta".to_string(),
                 ..Default::default()
             },
+            toc: vec![],
             excerpt: Some("page excerpt".to_string()),
         };
         let content_page_1 = LiquidGlobalsPage {
@@ -361,6 +365,7 @@ mod tests {
                 title: "Post 1 Meta".to_string(),
                 ..Default::default()
             },
+            toc: vec![],
             excerpt: Some("post1 excerpt".to_string()),
         };
         let content_page_2 = LiquidGlobalsPage {
@@ -371,6 +376,7 @@ mod tests {
                 title: "About Meta".to_string(),
                 ..Default::default()
             },
+            toc: vec![],
             excerpt: None,
         };
 

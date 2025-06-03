@@ -1,10 +1,9 @@
-use std::{collections::HashMap, path::PathBuf};
-
 use gray_matter::{Matter, engine::YAML};
 use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, path::PathBuf};
 use toml::Value;
 
-use crate::normalize_line_endings;
+use crate::{document_toc::toc_from_document, normalize_line_endings};
 
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 pub struct Heading {
@@ -84,9 +83,10 @@ impl Document {
         Self {
             at_path: path.display().to_string(),
             metadata: base_metadata,
-            markdown: parse_result.content,
+            markdown: parse_result.content.clone(),
             excerpt: parse_result.excerpt,
             emit: should_emit,
+            toc: toc_from_document(parse_result.content.as_str()),
             ..Default::default()
         }
     }
