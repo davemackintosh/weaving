@@ -149,7 +149,6 @@ address = "localhost:8080"
                     let mut clients_lock = clients_broadcast.lock().await;
 
                     for (i, client_tx) in clients_lock.iter().enumerate() {
-                        println!("sending reload to {:p}", client_tx);
                         if let Err(err) = client_tx.send(websocket::Message::Text(message.clone()))
                         {
                             eprint!("ERROR sending reload: {}", err.red());
@@ -173,9 +172,8 @@ address = "localhost:8080"
 
             let watch_path = safe_path.clone();
 
-            // Watch files for changes task (using tokio::spawn)
+            // Watch files for changes task
             serve_tasks.push(tokio::spawn(async move {
-                // Changed to tokio::spawn(async move { ... })
                 let (tx, rx) = std::sync::mpsc::channel();
                 let mut watcher = RecommendedWatcher::new(tx, Config::default()).unwrap();
                 watcher

@@ -81,7 +81,10 @@ impl<'a> ContentRenderer for TemplateRenderer<'a> {
                         emit: for_document.emit,
                     }),
                     Err(err) => {
-                        dbg!("Template rendering error {:#?}", &err);
+                        eprintln!(
+                            "Template rendering error '{}' {:#?}",
+                            &for_document.at_path, &err
+                        );
                         Err(BuildError::Err(err.to_string()))
                     }
                 }

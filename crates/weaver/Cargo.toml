@@ -1,6 +1,6 @@
 [package]
 name = "weaver-lib"
-version = "0.2.5"
+version = "0.2.6"
 edition = "2024"
 license-file = "../../LICENSE"
 description = "static site generator as a library, markdown and liquid in, HTML out."

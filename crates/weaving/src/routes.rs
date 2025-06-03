@@ -68,7 +68,6 @@ pub fn serve_websocket(
                 loop {
                     match rx_for_broadcast_list.try_recv() {
                         Ok(message) => {
-                            println!("got message {:#?}", &message);
                             match message {
                                 Message::Text(txt) => {
                                     println!("[WS Handler] Received text: {}", txt.cyan());
@@ -168,13 +167,16 @@ pub fn serve_catchall(safe_path: &Path, request: &Request) -> Response {
     println!("Serving: {:?}", &file_path.green());
     let serve_address = instance.config.serve_config.address.clone();
 
-    if let Ok(_is_binary) = is_probably_binary(file_path.to_string_lossy().to_string()) {
-        let mime_type = mime_guess::from_path(&file_path).first_or_octet_stream();
-        return Response::from_file(
-            mime_type.to_string(),
-            File::open(&file_path)
-                .unwrap_or_else(|_| panic!("failed to open {} for reading.", file_path.display())),
-        );
+    if let Ok(is_binary) = is_probably_binary(file_path.to_string_lossy().to_string()) {
+        if is_binary {
+            let mime_type = mime_guess::from_path(&file_path).first_or_octet_stream();
+            return Response::from_file(
+                mime_type.to_string(),
+                File::open(&file_path).unwrap_or_else(|_| {
+                    panic!("failed to open {} for reading.", file_path.display())
+                }),
+            );
+        }
     }
 
     match fs::read_to_string(&file_path) {

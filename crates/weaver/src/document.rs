@@ -70,7 +70,11 @@ impl Document {
         };
 
         if base_metadata_opt.is_err() {
-            dbg!("error parsing: {}", base_metadata_opt.err());
+            eprintln!(
+                "error parsing '{}': {:?}",
+                &path.display(),
+                base_metadata_opt.err()
+            );
             return Self::default();
         }
 
