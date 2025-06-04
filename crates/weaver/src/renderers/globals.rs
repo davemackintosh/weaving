@@ -26,7 +26,6 @@ impl From<&crate::Document> for LiquidGlobalsPage {
     fn from(value: &crate::Document) -> Self {
         let route_kstring = KString::from(value.at_path.clone());
 
-        println!("TOC? {:?}", &value.toc);
         Self {
             route: route_kstring,
             excerpt: value.excerpt.clone(),
