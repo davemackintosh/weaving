@@ -1,5 +1,4 @@
 use clap::{Parser, Subcommand};
-use crossbeam_channel::{Receiver, Sender, unbounded};
 use futures::future::join_all;
 use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use owo_colors::OwoColorize;
@@ -12,13 +11,16 @@ use std::{
     sync::Arc,
 };
 use template::{Templates, get_new_site};
-use tokio::sync::Mutex;
+use tokio::sync::{
+    Mutex,
+    mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
+};
 use weaver_lib::Weaver;
 
 pub mod routes;
 pub mod template;
 
-type WsClients = Arc<Mutex<Vec<Sender<Message>>>>;
+type WsClients = Arc<Mutex<Vec<UnboundedSender<Message>>>>;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -140,11 +142,14 @@ address = "localhost:8080"
             let clients_clone = clients.clone(); // For HTTP server thread
             let clients_broadcast = clients.clone(); // For broadcasting thread
 
-            let (file_change_tx, file_change_rx): (Sender<String>, Receiver<String>) = unbounded();
+            let (file_change_tx, mut file_change_rx): (
+                UnboundedSender<String>,
+                UnboundedReceiver<String>,
+            ) = unbounded_channel();
             let file_change_tx_for_watcher = file_change_tx.clone(); // For watcher thread
 
             serve_tasks.push(tokio::spawn(async move {
-                for message in file_change_rx {
+                while let Some(message) = file_change_rx.recv().await {
                     let mut disconnected_clients = Vec::new();
                     let mut clients_lock = clients_broadcast.lock().await;
 
