@@ -1,9 +1,10 @@
 pub mod globals;
 use async_trait::async_trait;
+use comrak::plugins::syntect::SyntectAdapterBuilder;
+use comrak::{ExtensionOptions, Options, Plugins, RenderOptions, markdown_to_html_with_plugins};
 use futures::StreamExt;
 use globals::LiquidGlobals;
 use liquid::partials::{EagerCompiler, InMemorySource};
-use markdown::CompileOptions;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -124,9 +125,9 @@ pub struct MarkdownRenderer {
 }
 
 // This renderer is strange for several reasons, the way it works is as follows.
-// 1. do a pass to gather the headings in the document
-// 2. do a pass over the template.
-// 3. do a pass over the markdown to get html from the
+// 1. Do a pass to gather the headings in the document
+// 2. Do a pass over the template.
+// 3. Do a pass over the markdown to get HTML from the
 #[async_trait]
 impl ContentRenderer for MarkdownRenderer {
     async fn render(
@@ -153,17 +154,31 @@ impl ContentRenderer for MarkdownRenderer {
             .render(&mut data.to_owned(), partials.clone())
             .await?;
 
-        let markdown_html = markdown::to_html_with_options(
+        let mut markdown_plugins = Plugins::default();
+        let markdown_syntax_hl_adapter = SyntectAdapterBuilder::new().css().build();
+        markdown_plugins.render.codefence_syntax_highlighter = Some(&markdown_syntax_hl_adapter);
+        let markdown_html = markdown_to_html_with_plugins(
             body_html.contents.as_str(),
-            &markdown::Options {
-                compile: CompileOptions {
-                    allow_dangerous_html: true,
-                    ..CompileOptions::gfm()
+            &Options {
+                render: RenderOptions {
+                    unsafe_: true,
+                    figure_with_caption: true,
+                    gfm_quirks: true,
+                    ..Default::default()
                 },
-                ..markdown::Options::gfm()
+                extension: ExtensionOptions {
+                    strikethrough: true,
+                    tagfilter: true,
+                    table: true,
+                    autolink: true,
+                    header_ids: Some("".into()),
+                    alerts: true,
+                    ..Default::default()
+                },
+                ..Default::default()
             },
-        )
-        .expect("failed to render markdown to html");
+            &markdown_plugins,
+        );
 
         let template_renderer = TemplateRenderer::new(
             template.clone(),
@@ -256,8 +271,7 @@ mod test {
 	<body></body>
 </html>
 "
-                )
-                .into(),
+                ),
                 path: format!("{}/site/with_headings/index.html", base_path).into(),
                 emit: true,
             },
@@ -288,7 +302,7 @@ mod test {
         assert_eq!(
             WritableFile {
                 contents: normalize_line_endings(
-                    br#"<!doctype html>
+                    br##"<!doctype html>
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
@@ -304,19 +318,20 @@ mod test {
 		<main>
 			<h1>test</h1>
 			<article>
-				<h1>heading 1</h1>
+				<h1><a href="#heading-1" aria-hidden="true" class="anchor" id="heading-1"></a>heading 1</h1>
 <p>I am a paragraph.</p>
-<h2>heading <span>2</span></h2>
+<h2><a href="#heading-2" aria-hidden="true" class="anchor" id="heading-2"></a>heading <span>2</span></h2>
 <p>I'm the second paragraph.</p>
-<h3>heading 3</h3>
-<h4>heading 4</h4>
-<h5>heading 5</h5>
-<h6>heading 6</h6>
+<h3><a href="#heading-3" aria-hidden="true" class="anchor" id="heading-3"></a>heading 3</h3>
+<h4><a href="#heading-4" aria-hidden="true" class="anchor" id="heading-4"></a>heading 4</h4>
+<h5><a href="#heading-5" aria-hidden="true" class="anchor" id="heading-5"></a>heading 5</h5>
+<h6><a href="#heading-6" aria-hidden="true" class="anchor" id="heading-6"></a>heading 6</h6>
+
 			</article>
 		</main>
 	</body>
 </html>
-"#
+"##
                 ),
                 path: format!("{}/site/with_headings/index.html", base_path).into(),
                 emit: true,

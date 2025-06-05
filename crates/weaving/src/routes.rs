@@ -1,24 +1,23 @@
 use std::{
-    any::type_name_of_val,
     fs::{self, File},
     io::{self, Cursor},
     path::Path,
     sync::Arc,
 };
 
-use crossbeam_channel::{Sender, TryRecvError, unbounded};
 use owo_colors::OwoColorize;
 use rouille::{
     Request, Response,
     websocket::{self, Message},
 };
+use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 use weaver_lib::Weaver;
 
 use crate::sanitize_path;
 
 pub fn serve_websocket(
     request: &Request,
-    clients: Arc<tokio::sync::Mutex<Vec<Sender<Message>>>>, // Example using tokio::sync::Mutex
+    clients: Arc<tokio::sync::Mutex<Vec<UnboundedSender<Message>>>>, // Example using tokio::sync::Mutex
     tokio_handle: tokio::runtime::Handle,
 ) -> Response {
     println!("{}", "Attempting to serve websocket".green());
@@ -30,7 +29,7 @@ pub fn serve_websocket(
             tokio_handle.spawn(async move {
                 println!("[WS Handler] New WebSocket connection established!");
 
-                let (tx_for_broadcast_list, rx_for_broadcast_list) = unbounded::<Message>();
+                let (tx_for_broadcast_list, mut rx_for_broadcast_list) = unbounded_channel();
                 {
                     let mut guard = clients_for_ws_thread.lock().await;
                     guard.push(tx_for_broadcast_list.clone());
@@ -65,9 +64,7 @@ pub fn serve_websocket(
                 println!("[WS Handler] 'hello' sent.");
 
                 println!("[WS Handler] Listening for messages...");
-                loop {
-                    match rx_for_broadcast_list.try_recv() {
-                        Ok(message) => {
+                while let Some(message) = rx_for_broadcast_list.recv().await {
                             match message {
                                 Message::Text(txt) => {
                                     println!("[WS Handler] Received text: {}", txt.cyan());
@@ -92,17 +89,6 @@ pub fn serve_websocket(
                                     }
                                 }
                             }
-                        }
-                        Err(TryRecvError::Empty) => {}
-                        Err(e) => {
-                            println!(
-                                "[WS Handler] Error receiving message: {:?} {:?}",
-                                e.red(),
-                                type_name_of_val(&e)
-                            );
-                            break;
-                        }
-                    }
                 }
 
                 println!("[WS Handler] WebSocket connection processing finished.");
