@@ -119,7 +119,10 @@ impl Weaver {
         {
             match entry {
                 Ok(path) => {
-                    let mut doc = Document::new_from_path(path.clone());
+                    let mut doc = Document::new_from_path(
+                        self.config.content_dir.clone().into(),
+                        path.clone(),
+                    );
 
                     self.tags.append(&mut doc.metadata.tags);
                     // Assuming route_from_path is correct and returns String

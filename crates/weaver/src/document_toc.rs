@@ -84,6 +84,7 @@ mod test {
         let base_path_wd = std::env::current_dir().unwrap().display().to_string();
         let base_path = format!("{}/test_fixtures/markdown", base_path_wd);
         let doc_arc = Arc::new(Mutex::new(Document::new_from_path(
+            base_path.clone().into(),
             format!("{}/with_headings.md", base_path).into(),
         )));
 
