@@ -1,7 +1,5 @@
+use crate::{document::Heading, slugify::slugify};
 use markdown::{ParseOptions, mdast::Node};
-use slug::slugify;
-
-use crate::document::Heading;
 
 // Helper function to recursively extract text from inline nodes
 // This is needed to get the raw text content of a heading or other inline structures

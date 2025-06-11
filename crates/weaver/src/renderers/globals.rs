@@ -13,7 +13,6 @@ pub struct LiquidGlobalsPage {
     pub body: String,
     pub meta: BaseMetaData,
     pub toc: Vec<Heading>,
-    pub excerpt: Option<String>,
 }
 
 impl LiquidGlobalsPage {
@@ -25,9 +24,9 @@ impl LiquidGlobalsPage {
 
 impl From<&crate::Document> for LiquidGlobalsPage {
     fn from(value: &crate::Document) -> Self {
+        dbg!(value);
         Self {
             route: route_from_path(value.content_root.clone(), value.at_path.clone().into()).into(),
-            excerpt: value.excerpt.clone(),
             meta: value.metadata.clone(),
             body: value.html.clone().unwrap_or("".into()),
             toc: value.toc.clone(),
@@ -129,16 +128,10 @@ mod tests {
     use std::sync::Arc;
     use tokio::sync::Mutex;
 
-    fn create_mock_document(
-        route: &str,
-        title: &str,
-        body: Option<&str>,
-        excerpt: Option<&str>,
-    ) -> crate::Document {
+    fn create_mock_document(route: &str, title: &str, body: Option<&str>) -> crate::Document {
         crate::Document {
             content_root: PathBuf::new(),
             at_path: route.to_string(),
-            excerpt: excerpt.map(|s| s.to_string()),
             metadata: BaseMetaData {
                 title: title.to_string(),
                 ..Default::default()
@@ -161,7 +154,6 @@ mod tests {
                 title: "Test Meta Title".to_string(),
                 ..Default::default()
             },
-            excerpt: None,
         };
 
         let liquid_value = liquid_page.to_liquid_data();
@@ -218,13 +210,6 @@ mod tests {
                 .to_kstr(),
             "default"
         );
-        assert_eq!(
-            liquid_object
-                .get(&KString::from("excerpt"))
-                .unwrap()
-                .is_nil(),
-            true
-        );
 
         /*let expected_tags_liquid_array = liquid::model::Value::Array(vec![
             liquid::model::Value::scalar("tag1"),
@@ -248,14 +233,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_liquid_globals_new() {
-        let page_doc = create_mock_document("/page", "Page Title", Some("<p>page body</p>"), None);
-        let content_doc_1 = create_mock_document(
-            "/posts/post-1",
-            "Post One",
-            Some("<p>post 1 body</p>"),
-            Some("excerpt 1"),
-        );
-        let content_doc_2 = create_mock_document("/about", "About Us", None, None);
+        let page_doc = create_mock_document("/page", "Page Title", Some("<p>page body</p>"));
+        let content_doc_1 =
+            create_mock_document("/posts/post-1", "Post One", Some("<p>post 1 body</p>"));
+        let content_doc_2 = create_mock_document("/about", "About Us", None);
 
         let page_arc_mutex = Arc::new(Mutex::new(page_doc.clone()));
         let post1_arc_mutex = Arc::new(Mutex::new(content_doc_1.clone()));
@@ -327,7 +308,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_liquid_globals_new_only_page_doc() {
-        let page_doc = create_mock_document("/index", "Home Page", Some("<p>home</p>"), None);
+        let page_doc = create_mock_document("/index", "Home Page", Some("<p>home</p>"));
         let page_arc_mutex = Arc::new(Mutex::new(page_doc.clone()));
         let page_global = LiquidGlobalsPage::from(&page_doc);
 
@@ -359,7 +340,6 @@ mod tests {
                 ..Default::default()
             },
             toc: vec![],
-            excerpt: Some("page excerpt".to_string()),
         };
         let content_page_1 = LiquidGlobalsPage {
             route: KString::from("/post-1"),
@@ -370,7 +350,6 @@ mod tests {
                 ..Default::default()
             },
             toc: vec![],
-            excerpt: Some("post1 excerpt".to_string()),
         };
         let content_page_2 = LiquidGlobalsPage {
             route: KString::from("/about"),
@@ -381,7 +360,6 @@ mod tests {
                 ..Default::default()
             },
             toc: vec![],
-            excerpt: None,
         };
 
         let mut content_map: HashMap<KString, Vec<LiquidGlobalsPage>> = HashMap::new();
