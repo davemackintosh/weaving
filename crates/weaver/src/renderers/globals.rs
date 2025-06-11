@@ -6,13 +6,14 @@ use serde::{Deserialize, Serialize};
 use std::path::{Component, PathBuf};
 use std::{collections::HashMap, sync::Arc};
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Default)]
 pub struct LiquidGlobalsPage {
     pub route: KString,
     pub title: String,
     pub body: String,
     pub meta: BaseMetaData,
     pub toc: Vec<Heading>,
+    pub extra_css: String,
 }
 
 impl LiquidGlobalsPage {
@@ -24,13 +25,13 @@ impl LiquidGlobalsPage {
 
 impl From<&crate::Document> for LiquidGlobalsPage {
     fn from(value: &crate::Document) -> Self {
-        dbg!(value);
         Self {
             route: route_from_path(value.content_root.clone(), value.at_path.clone().into()).into(),
             meta: value.metadata.clone(),
             body: value.html.clone().unwrap_or("".into()),
             toc: value.toc.clone(),
             title: value.metadata.title.clone(),
+            extra_css: "".into(),
         }
     }
 }
@@ -154,6 +155,7 @@ mod tests {
                 title: "Test Meta Title".to_string(),
                 ..Default::default()
             },
+            ..Default::default()
         };
 
         let liquid_value = liquid_page.to_liquid_data();
@@ -339,7 +341,7 @@ mod tests {
                 title: "Page Meta".to_string(),
                 ..Default::default()
             },
-            toc: vec![],
+            ..Default::default()
         };
         let content_page_1 = LiquidGlobalsPage {
             route: KString::from("/post-1"),
@@ -350,6 +352,7 @@ mod tests {
                 ..Default::default()
             },
             toc: vec![],
+            ..Default::default()
         };
         let content_page_2 = LiquidGlobalsPage {
             route: KString::from("/about"),
@@ -360,6 +363,7 @@ mod tests {
                 ..Default::default()
             },
             toc: vec![],
+            ..Default::default()
         };
 
         let mut content_map: HashMap<KString, Vec<LiquidGlobalsPage>> = HashMap::new();
