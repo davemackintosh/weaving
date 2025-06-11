@@ -18,7 +18,6 @@ pub struct Document {
     pub at_path: String,
     pub metadata: BaseMetaData,
     pub markdown: String,
-    pub excerpt: Option<String>,
     pub html: Option<String>,
     pub toc: Vec<Heading>,
     pub emit: bool,
@@ -36,6 +35,7 @@ pub struct BaseMetaData {
     pub emit: bool,
     pub published: Option<String>,
     pub last_updated: Option<String>,
+    pub excerpt: Option<String>,
 
     #[serde(flatten)]
     pub user: HashMap<String, Value>,
@@ -53,6 +53,7 @@ impl Default for BaseMetaData {
             last_updated: None,
             emit: true,
             user: HashMap::new(),
+            excerpt: None,
         }
     }
 }
@@ -88,14 +89,14 @@ impl Document {
 
         // If there's no published in the base_metadata, we will use the file's created at meta.
         if base_metadata.published.is_some() {
-            match dateparser::parse(&base_metadata.published.unwrap()) {
+            match dateparser::parse(&base_metadata.published.clone().unwrap()) {
                 Ok(parsed) => {
                     // TODO: Fix the unwraps here.
                     base_metadata.published = Some(DateTime::<Local>::from(parsed).to_string());
                     base_metadata.last_updated = base_metadata.published.clone();
                 }
                 Err(e) => {
-                    panic!(
+                    eprintln!(
                         "Failed to parse the published date in {}\n{}",
                         &path.display(),
                         e
@@ -116,7 +117,6 @@ impl Document {
             at_path: path.display().to_string(),
             metadata: base_metadata,
             markdown: parse_result.content.clone(),
-            excerpt: parse_result.excerpt,
             emit: should_emit,
             toc: toc_from_document(parse_result.content.as_str()),
 
@@ -155,12 +155,15 @@ mod test {
             user: HashMap::new(),
             emit: true,
             template: "default".into(),
+            excerpt: Some("testing".into()),
+            ..Default::default()
         };
 
         assert_eq!(expected.tags, document.metadata.tags);
         assert_eq!(expected.keywords, document.metadata.keywords);
         assert_eq!(expected.title, document.metadata.title);
         assert_eq!(expected.description, document.metadata.description);
+        assert_eq!(expected.excerpt, document.metadata.excerpt);
         assert_eq!(expected.user, document.metadata.user);
         assert_eq!(expected.emit, document.metadata.emit);
         assert_eq!(expected.template, document.metadata.template);

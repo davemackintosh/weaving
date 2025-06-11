@@ -25,6 +25,7 @@ pub mod filters;
 pub mod partial;
 pub mod renderers;
 pub mod routes;
+pub mod slugify;
 pub mod template;
 
 use std::fs;

@@ -2271,9 +2271,9 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "slug",
  "tokio",
  "toml 0.8.22",
+ "unicode-normalization",
 ]
 
 [[package]]
