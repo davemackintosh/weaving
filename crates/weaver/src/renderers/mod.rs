@@ -11,6 +11,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::config::TemplateLang;
+use crate::filters::json::JSON;
 use crate::filters::raw_html::RawHtml;
 use crate::partial::Partial;
 use crate::routes::route_from_path;
@@ -68,16 +69,21 @@ impl<'a> ContentRenderer for TemplateRenderer<'a> {
             } => {
                 let wtemplate = weaver_template.lock().await;
 
-                match liquid_parser
-                    .parse(&wtemplate.contents)
-                    .unwrap()
-                    .render(&data.to_liquid_data())
-                {
-                    Ok(result) => Ok(WritableFile {
-                        contents: result,
-                        path: out_path_for_document(for_document, weaver_config),
-                        emit: for_document.emit,
-                    }),
+                match liquid_parser.parse(&wtemplate.contents) {
+                    Ok(parsed) => match parsed.render(&data.to_liquid_data()) {
+                        Ok(result) => Ok(WritableFile {
+                            contents: result,
+                            path: out_path_for_document(for_document, weaver_config),
+                            emit: for_document.emit,
+                        }),
+                        Err(err) => {
+                            eprintln!(
+                                "Template rendering error '{}' {:#?}",
+                                &for_document.at_path, &err
+                            );
+                            Err(BuildError::Err(err.to_string()))
+                        }
+                    },
                     Err(err) => {
                         eprintln!(
                             "Template rendering error '{}' {:#?}",
@@ -107,6 +113,7 @@ impl<'a> TemplateRenderer<'a> {
         Self::LiquidBuilder {
             liquid_parser: liquid::ParserBuilder::with_stdlib()
                 .filter(RawHtml)
+                .filter(JSON)
                 .partials(registered_partials)
                 .build()
                 .unwrap(),
@@ -242,8 +249,10 @@ mod test {
         let template = Template::new_from_path(
             format!("{}/test_fixtures/liquid/template.liquid", base_path_wd).into(),
         );
-        let doc_arc =
-            Document::new_from_path(format!("{}/content/with_headings.md", base_path).into());
+        let doc_arc = Document::new_from_path(
+            base_path.clone().into(),
+            format!("{}/content/with_headings.md", base_path).into(),
+        );
         let config = Arc::new(WeaverConfig::new(base_path.clone().into()));
         let renderer = TemplateRenderer::new(
             Arc::new(Mutex::new(template)),
@@ -254,6 +263,7 @@ mod test {
 
         let mut data = LiquidGlobals::new(
             Arc::new(Mutex::new(Document::new_from_path(
+                base_path.clone().into(),
                 format!("{}/content/with_headings.md", base_path).into(),
             ))),
             &Arc::new(HashMap::new()),
@@ -286,6 +296,7 @@ mod test {
         let template =
             Template::new_from_path(format!("{}/templates/default.liquid", base_path).into());
         let doc_arc = Arc::new(Mutex::new(Document::new_from_path(
+            base_path.clone().into(),
             format!("{}/content/with_headings.md", base_path).into(),
         )));
         let config = Arc::new(WeaverConfig::new(base_path.clone().into()));

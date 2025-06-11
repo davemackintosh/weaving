@@ -22,6 +22,7 @@ pub struct Document {
     pub html: Option<String>,
     pub toc: Vec<Heading>,
     pub emit: bool,
+    pub content_root: PathBuf,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
@@ -33,6 +34,8 @@ pub struct BaseMetaData {
     pub keywords: Vec<String>,
     pub template: String,
     pub emit: bool,
+    pub published: Option<String>,
+    pub last_updated: Option<String>,
 
     #[serde(flatten)]
     pub user: HashMap<String, Value>,
@@ -46,14 +49,16 @@ impl Default for BaseMetaData {
             description: Default::default(),
             keywords: Default::default(),
             template: "default".into(),
+            published: None,
+            last_updated: None,
             emit: true,
-            user: Default::default(),
+            user: HashMap::new(),
         }
     }
 }
 
 impl Document {
-    pub fn new_from_path(path: PathBuf) -> Self {
+    pub fn new_from_path(content_root: PathBuf, path: PathBuf) -> Self {
         let contents_result = std::fs::read_to_string(&path);
         let file_meta = std::fs::metadata(&path).unwrap();
 
@@ -64,7 +69,6 @@ impl Document {
 
         let matter = Matter::<YAML>::new();
         let parseable = normalize_line_endings(contents_result.as_ref().unwrap().as_bytes());
-        println!("{}", &parseable);
         let parse_result = matter.parse(&parseable);
         let base_metadata_opt = match parse_result.data {
             Some(data) => data.deserialize::<BaseMetaData>(),
@@ -83,32 +87,39 @@ impl Document {
         let mut base_metadata = base_metadata_opt.unwrap();
 
         // If there's no published in the base_metadata, we will use the file's created at meta.
-        if !base_metadata.user.contains_key("published") {
-            // TODO: Fix the unwraps here.
-            base_metadata.user.insert(
-                "published".into(),
-                Value::from(DateTime::<Local>::from(file_meta.created().unwrap()).to_string()),
-            );
-            base_metadata.user.insert(
-                "last_updated".into(),
-                base_metadata.user.get("published").unwrap().clone(),
-            );
+        if base_metadata.published.is_some() {
+            match dateparser::parse(&base_metadata.published.unwrap()) {
+                Ok(parsed) => {
+                    // TODO: Fix the unwraps here.
+                    base_metadata.published = Some(DateTime::<Local>::from(parsed).to_string());
+                    base_metadata.last_updated = base_metadata.published.clone();
+                }
+                Err(e) => {
+                    panic!(
+                        "Failed to parse the published date in {}\n{}",
+                        &path.display(),
+                        e
+                    );
+                }
+            }
         } else {
-            base_metadata.user.insert(
-                "last_updated".into(),
-                Value::from(DateTime::<Local>::from(file_meta.modified().unwrap()).to_string()),
-            );
+            base_metadata.published =
+                Some(DateTime::<Local>::from(file_meta.created().unwrap()).to_string());
+            base_metadata.last_updated =
+                Some(DateTime::<Local>::from(file_meta.modified().unwrap()).to_string());
         }
 
         let should_emit = base_metadata.clone().emit;
 
         Self {
+            content_root,
             at_path: path.display().to_string(),
             metadata: base_metadata,
             markdown: parse_result.content.clone(),
             excerpt: parse_result.excerpt,
             emit: should_emit,
             toc: toc_from_document(parse_result.content.as_str()),
+
             ..Default::default()
         }
     }
@@ -129,15 +140,18 @@ mod test {
             .unwrap()
             .to_string();
         let base_path = format!("{}/test_fixtures/markdown", base_path_wd);
-        let document = Document::new_from_path(format!("{}/full_frontmatter.md", base_path).into());
+        let document = Document::new_from_path(
+            base_path.clone().into(),
+            format!("{}/full_frontmatter.md", &base_path).into(),
+        );
         let time: DateTime<Local> = Local::now();
         let expected = BaseMetaData {
             tags: vec!["1".into()],
             keywords: vec!["2".into()],
             title: "test".into(),
             description: "test".into(),
-            published: Some(time),
-            last_updated: Some(time),
+            published: Some(time.to_string()),
+            last_updated: Some(time.to_string()),
             user: HashMap::new(),
             emit: true,
             template: "default".into(),
@@ -150,5 +164,7 @@ mod test {
         assert_eq!(expected.user, document.metadata.user);
         assert_eq!(expected.emit, document.metadata.emit);
         assert_eq!(expected.template, document.metadata.template);
+        assert!(document.metadata.published.is_some());
+        assert!(document.metadata.last_updated.is_some());
     }
 }

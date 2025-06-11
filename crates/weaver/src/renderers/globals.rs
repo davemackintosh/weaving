@@ -1,4 +1,5 @@
 use crate::document::{BaseMetaData, Heading};
+use crate::routes::route_from_path;
 use liquid::model::KString;
 use liquid::{self};
 use serde::{Deserialize, Serialize};
@@ -24,10 +25,8 @@ impl LiquidGlobalsPage {
 
 impl From<&crate::Document> for LiquidGlobalsPage {
     fn from(value: &crate::Document) -> Self {
-        let route_kstring = KString::from(value.at_path.clone());
-
         Self {
-            route: route_kstring,
+            route: route_from_path(value.content_root.clone(), value.at_path.clone().into()).into(),
             excerpt: value.excerpt.clone(),
             meta: value.metadata.clone(),
             body: value.html.clone().unwrap_or("".into()),
@@ -40,8 +39,10 @@ impl From<&crate::Document> for LiquidGlobalsPage {
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct LiquidGlobals {
     pub page: LiquidGlobalsPage,
-    pub content: HashMap<KString, HashMap<KString, LiquidGlobalsPage>>,
+    pub content: HashMap<KString, Vec<LiquidGlobalsPage>>,
 }
+
+type ContentMap = HashMap<KString, Vec<LiquidGlobalsPage>>;
 
 impl LiquidGlobals {
     pub async fn new(
@@ -51,7 +52,7 @@ impl LiquidGlobals {
         let page_guard = page_arc_mutex.lock().await;
         let page_globals = LiquidGlobalsPage::from(&*page_guard);
 
-        let mut content_map: HashMap<KString, HashMap<KString, LiquidGlobalsPage>> = HashMap::new();
+        let mut content_map: ContentMap = HashMap::new();
         for (route, doc_arc_mutex) in all_documents_by_route.iter() {
             let path = PathBuf::from(route);
             let mut components = path.components().peekable();
@@ -75,10 +76,7 @@ impl LiquidGlobals {
             });
 
             if first_component.is_none() {
-                content_map.insert(
-                    route.clone(),
-                    HashMap::from([(route.clone(), doc_arc_mutex.clone())]),
-                );
+                content_map.insert(route.clone(), vec![doc_arc_mutex.clone()]);
             } else {
                 let f_path = first_component.unwrap();
                 match content_map.contains_key(&f_path) {
@@ -86,14 +84,11 @@ impl LiquidGlobals {
                         // Don't include the "list" page in the content list.
                         if route.clone() != format!("/{}/", f_path) {
                             let content_inner_map = content_map.get_mut(&f_path).unwrap();
-                            content_inner_map.insert(route.clone(), doc_arc_mutex.clone());
+                            content_inner_map.push(doc_arc_mutex.clone());
                         }
                     }
                     false => {
-                        content_map.insert(
-                            f_path.clone(),
-                            HashMap::from([(route.clone(), doc_arc_mutex.clone())]),
-                        );
+                        content_map.insert(f_path.clone(), vec![doc_arc_mutex.clone()]);
                     }
                 }
             }
@@ -101,9 +96,17 @@ impl LiquidGlobals {
 
         drop(page_guard);
 
+        let content = content_map
+            .into_iter()
+            .map(|(key, mut content)| {
+                content.sort_by(|a, b| b.meta.published.cmp(&a.meta.published));
+                (key, content)
+            })
+            .collect::<HashMap<KString, Vec<LiquidGlobalsPage>>>();
+
         Self {
             page: page_globals,
-            content: content_map,
+            content,
         }
     }
 
@@ -133,6 +136,7 @@ mod tests {
         excerpt: Option<&str>,
     ) -> crate::Document {
         crate::Document {
+            content_root: PathBuf::new(),
             at_path: route.to_string(),
             excerpt: excerpt.map(|s| s.to_string()),
             metadata: BaseMetaData {
@@ -279,7 +283,7 @@ mod tests {
         assert_eq!(liquid_globals.page, expected_page_globals);
         drop(page_doc_guard);
 
-        assert_eq!(liquid_globals.content.len(), 2);
+        assert_eq!(liquid_globals.content.len(), 3);
 
         assert!(liquid_globals.content.contains_key(&KString::from("posts")));
         assert!(
@@ -287,10 +291,10 @@ mod tests {
                 .content
                 .get("posts")
                 .unwrap()
-                .contains_key(&KString::from("/posts/post-1"))
+                .iter()
+                .any(|p| p.route == "/posts/post-1/")
         );
         assert!(liquid_globals.content.contains_key(&KString::from("about")));
-        assert!(!liquid_globals.content.contains_key(&KString::from("page")));
 
         let post1_doc_guard = post1_arc_mutex.lock().await;
         let expected_post1_globals = LiquidGlobalsPage::from(&*post1_doc_guard);
@@ -299,7 +303,8 @@ mod tests {
                 .content
                 .get(&KString::from("posts"))
                 .unwrap()
-                .get(&KString::from("/posts/post-1"))
+                .iter()
+                .find(|p| p.route == "/posts/post-1/")
                 .unwrap(),
             &expected_post1_globals
         );
@@ -312,7 +317,8 @@ mod tests {
                 .content
                 .get(&KString::from("about"))
                 .unwrap()
-                .get(&KString::from("/about"))
+                .iter()
+                .find(|p| p.route == "/about/")
                 .unwrap(),
             &expected_about_globals
         );
@@ -339,8 +345,7 @@ mod tests {
         assert_eq!(liquid_globals.page, expected_page_globals);
         drop(page_doc_guard);
 
-        assert_eq!(liquid_globals.content.len(), 0);
-        assert!(liquid_globals.content.is_empty());
+        assert_eq!(liquid_globals.content.len(), 1);
     }
 
     #[test]
@@ -379,15 +384,9 @@ mod tests {
             excerpt: None,
         };
 
-        let mut content_map: HashMap<KString, HashMap<KString, LiquidGlobalsPage>> = HashMap::new();
-        content_map.insert(
-            KString::from("/post-1"),
-            HashMap::from([(KString::from("/post-1"), content_page_1.clone())]),
-        );
-        content_map.insert(
-            KString::from("/about"),
-            HashMap::from([(KString::from("/about"), content_page_2.clone())]),
-        );
+        let mut content_map: HashMap<KString, Vec<LiquidGlobalsPage>> = HashMap::new();
+        content_map.insert(KString::from("/post-1"), vec![content_page_1.clone()]);
+        content_map.insert(KString::from("/about"), vec![content_page_2.clone()]);
 
         let liquid_globals = LiquidGlobals {
             page: page_page.clone(),
