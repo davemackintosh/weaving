@@ -11,6 +11,10 @@ use renderers::{
 };
 use routes::route_from_path;
 use std::{collections::HashMap, error::Error, fmt::Display, path::PathBuf, sync::Arc};
+use syntect::{
+    highlighting::ThemeSet,
+    html::{ClassStyle, css_for_theme_with_class_style},
+};
 use template::Template;
 use tokio::sync::Mutex;
 
@@ -215,12 +219,33 @@ impl Weaver {
         Ok(())
     }
 
+    fn get_css_for_theme(&self) -> String {
+        // Load all built-in themes
+        let theme_set = ThemeSet::load_defaults();
+
+        // Try to find the theme by name
+        if let Some(theme) = theme_set.themes.get(&self.config.syntax_theme) {
+            css_for_theme_with_class_style(theme, ClassStyle::Spaced).unwrap()
+        } else {
+            eprintln!(
+                "Didn't find theme '{}'. Defaulting.",
+                &self.config.syntax_theme
+            );
+            css_for_theme_with_class_style(
+                theme_set.themes.get("base16-ocean.dark").unwrap(),
+                ClassStyle::Spaced,
+            )
+            .unwrap()
+        }
+    }
     // The main build orchestration function
     pub async fn build(&self) -> Result<(), BuildError> {
         let mut all_liquid_pages_map: HashMap<KString, LiquidGlobalsPage> = HashMap::new();
         let mut convert_tasks = vec![];
+        let extra_css = self.get_css_for_theme();
 
         for document_arc_mutex in self.documents.iter() {
+            let extra_css_clone = extra_css.clone();
             let doc_arc_mutex_clone = Arc::clone(document_arc_mutex);
             let config_arc = Arc::clone(&self.config);
 
@@ -230,7 +255,8 @@ impl Weaver {
                     config_arc.content_dir.clone().into(),
                     doc_guard.at_path.clone().into(),
                 );
-                let liquid_page = LiquidGlobalsPage::from(&*doc_guard);
+                let mut liquid_page = LiquidGlobalsPage::from(&*doc_guard);
+                liquid_page.extra_css = extra_css_clone;
 
                 (KString::from(route), liquid_page)
             }));

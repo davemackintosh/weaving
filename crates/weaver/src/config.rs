@@ -53,6 +53,7 @@ pub struct WeaverConfig {
     pub templating_language: TemplateLang,
     pub image_config: ImageConfig,
     pub serve_config: ServeConfig,
+    pub syntax_theme: String,
 }
 
 impl Default for WeaverConfig {
@@ -75,6 +76,7 @@ impl Default for WeaverConfig {
             templating_language: TemplateLang::Liquid,
             image_config: Default::default(),
             serve_config: Default::default(),
+            syntax_theme: "base16-ocean.dark".into(),
         }
     }
 }
@@ -94,17 +96,13 @@ impl WeaverConfig {
         };
 
         Self {
-            version: user_supplied_config.version,
             base_dir: base_dir_str.clone(),
             content_dir: format!("{}/{}", &base_dir_str, user_supplied_config.content_dir),
-            base_url: user_supplied_config.base_url,
             partials_dir: format!("{}/{}", &base_dir_str, user_supplied_config.partials_dir),
             public_dir: format!("{}/{}", &base_dir_str, user_supplied_config.public_dir),
             build_dir: format!("{}/{}", &base_dir_str, user_supplied_config.build_dir),
             template_dir: format!("{}/{}", &base_dir_str, user_supplied_config.template_dir),
-            templating_language: user_supplied_config.templating_language,
-            image_config: user_supplied_config.image_config,
-            serve_config: user_supplied_config.serve_config,
+            ..user_supplied_config
         }
     }
 }
