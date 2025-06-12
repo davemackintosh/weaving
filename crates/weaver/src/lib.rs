@@ -271,7 +271,8 @@ impl Weaver {
         let all_liquid_pages_map_arc = Arc::new(all_liquid_pages_map);
 
         let templates_arc = Arc::new(self.templates.clone());
-        let config_arc = Arc::clone(&self.config);
+        let config_arc_copy = Arc::clone(&self.config);
+        let config_arc_well_known = Arc::clone(&self.config);
         let partials_arc = Arc::new(self.partials.clone());
 
         let mut tasks = vec![];
@@ -285,7 +286,7 @@ impl Weaver {
             globals.extra_css = extra_css.clone();
 
             let templates = Arc::clone(&templates_arc);
-            let config = Arc::clone(&config_arc);
+            let config = Arc::clone(&config_arc_copy);
             let partials = Arc::clone(&partials_arc);
 
             let doc_task = tokio::spawn(async move {
@@ -299,7 +300,7 @@ impl Weaver {
         }
 
         let public_copy_task = tokio::spawn(async move {
-            let config = Arc::clone(&config_arc);
+            let config = Arc::clone(&config_arc_copy);
             let folder_name = config
                 .public_dir
                 .clone()
@@ -325,6 +326,27 @@ impl Weaver {
         });
 
         tasks.push(public_copy_task);
+
+        let well_known_copy_task = tokio::spawn(async move {
+            let config = Arc::clone(&config_arc_well_known);
+            let well_known_path = format!("{}/.well-known", &config.base_dir);
+            let target = format!("{}/.well-known", config.build_dir.clone());
+
+            if fs::exists(well_known_path).expect("failed to check if there was a public directory")
+            {
+                println!("Copying {} to {}", config.public_dir.clone(), &target);
+
+                copy_dir_all(config.public_dir.clone(), target)
+            } else {
+                Ok(WritableFile {
+                    contents: "".into(),
+                    path: "".into(),
+                    emit: false,
+                })
+            }
+        });
+
+        tasks.push(well_known_copy_task);
 
         let render_results: Vec<Result<Result<WritableFile, BuildError>, tokio::task::JoinError>> =
             join_all(tasks).await; // Await all rendering tasks
