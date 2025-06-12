@@ -281,8 +281,12 @@ impl Weaver {
             let document_arc = Arc::clone(document_arc_mutex);
 
             let all_liquid_pages_map_clone = Arc::clone(&all_liquid_pages_map_arc);
-            let mut globals =
-                LiquidGlobals::new(Arc::clone(&document_arc), &all_liquid_pages_map_clone).await;
+            let mut globals = LiquidGlobals::new(
+                Arc::clone(&document_arc),
+                &all_liquid_pages_map_clone,
+                Arc::clone(&self.config),
+            )
+            .await;
             globals.extra_css = extra_css.clone();
 
             let templates = Arc::clone(&templates_arc);

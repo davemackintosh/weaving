@@ -1,3 +1,4 @@
+use crate::config::WeaverConfig;
 use crate::document::{BaseMetaData, Heading};
 use crate::routes::route_from_path;
 use liquid::model::KString;
@@ -39,6 +40,7 @@ pub struct LiquidGlobals {
     pub page: LiquidGlobalsPage,
     pub content: HashMap<KString, Vec<LiquidGlobalsPage>>,
     pub extra_css: String,
+    pub site_config: Arc<WeaverConfig>,
 }
 
 type ContentMap = HashMap<KString, Vec<LiquidGlobalsPage>>;
@@ -47,6 +49,7 @@ impl LiquidGlobals {
     pub async fn new(
         page_arc_mutex: Arc<tokio::sync::Mutex<crate::Document>>,
         all_documents_by_route: &Arc<HashMap<KString, LiquidGlobalsPage>>,
+        site_config: Arc<WeaverConfig>,
     ) -> Self {
         let page_guard = page_arc_mutex.lock().await;
         let page_globals = LiquidGlobalsPage::from(&*page_guard);
@@ -107,6 +110,7 @@ impl LiquidGlobals {
             page: page_globals,
             content,
             extra_css: "".into(),
+            site_config,
         }
     }
 
@@ -116,6 +120,8 @@ impl LiquidGlobals {
             "extra_css": self.extra_css,
             "content": liquid::model::to_value(&self.content)
                  .expect("Failed to serialize content HashMap to liquid value"),
+            "site_config": liquid::model::to_value(&*self.site_config)
+                 .expect("Failed to serialize site config to liquid value"),
         })
     }
 }
@@ -259,6 +265,7 @@ mod tests {
         let liquid_globals = LiquidGlobals::new(
             Arc::clone(&page_arc_mutex),
             &Arc::new(all_documents_by_route),
+            Arc::new(WeaverConfig::default()),
         )
         .await;
 
@@ -321,6 +328,7 @@ mod tests {
         let liquid_globals = LiquidGlobals::new(
             Arc::clone(&page_arc_mutex),
             &Arc::new(all_documents_by_route),
+            Arc::new(WeaverConfig::default()),
         )
         .await;
 
@@ -375,6 +383,7 @@ mod tests {
             page: page_page.clone(),
             content: content_map.clone(),
             extra_css: "".into(),
+            site_config: Arc::new(WeaverConfig::default()),
         };
 
         let liquid_object = liquid_globals.to_liquid_data();

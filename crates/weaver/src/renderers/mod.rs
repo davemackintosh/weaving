@@ -267,6 +267,7 @@ mod test {
                 format!("{}/content/with_headings.md", base_path).into(),
             ))),
             &Arc::new(HashMap::new()),
+            Arc::new(WeaverConfig::default()),
         )
         .await;
 
@@ -307,7 +308,12 @@ mod test {
             vec![],
         );
 
-        let mut data = LiquidGlobals::new(doc_arc, &Arc::new(HashMap::new())).await;
+        let mut data = LiquidGlobals::new(
+            doc_arc,
+            &Arc::new(HashMap::new()),
+            Arc::new(WeaverConfig::default()),
+        )
+        .await;
         let result = renderer.render(&mut data, vec![]).await;
 
         assert_eq!(

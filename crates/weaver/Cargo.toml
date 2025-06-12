@@ -11,7 +11,7 @@ repository = "https://github.com/davemackintosh/weaving/"
 
 [dependencies]
 toml = "0.8.22"
-serde = { version = "1.0.219", features = ["derive", "alloc"] }
+serde = { version = "1.0.219", features = ["derive", "alloc", "rc"] }
 markdown = "1.0.0"
 comrak = "0.39"
 pretty_assertions = "1.4.1"

@@ -2,14 +2,14 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum TemplateLang {
     #[default]
     Liquid,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 #[serde(default)]
 pub struct ImageConfig {
     pub quality: u8,
@@ -21,7 +21,7 @@ impl Default for ImageConfig {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 #[serde(default)]
 pub struct ServeConfig {
     pub watch_excludes: Vec<String>,
@@ -39,7 +39,7 @@ impl Default for ServeConfig {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 #[serde(default)]
 pub struct WeaverConfig {
     pub version: String,
