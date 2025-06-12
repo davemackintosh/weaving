@@ -13,7 +13,6 @@ pub struct LiquidGlobalsPage {
     pub body: String,
     pub meta: BaseMetaData,
     pub toc: Vec<Heading>,
-    pub extra_css: String,
 }
 
 impl LiquidGlobalsPage {
@@ -31,7 +30,6 @@ impl From<&crate::Document> for LiquidGlobalsPage {
             body: value.html.clone().unwrap_or("".into()),
             toc: value.toc.clone(),
             title: value.metadata.title.clone(),
-            extra_css: "".into(),
         }
     }
 }
@@ -40,6 +38,7 @@ impl From<&crate::Document> for LiquidGlobalsPage {
 pub struct LiquidGlobals {
     pub page: LiquidGlobalsPage,
     pub content: HashMap<KString, Vec<LiquidGlobalsPage>>,
+    pub extra_css: String,
 }
 
 type ContentMap = HashMap<KString, Vec<LiquidGlobalsPage>>;
@@ -107,14 +106,16 @@ impl LiquidGlobals {
         Self {
             page: page_globals,
             content,
+            extra_css: "".into(),
         }
     }
 
     pub fn to_liquid_data(&self) -> liquid::Object {
         liquid::object!({
             "page": self.page.to_liquid_data(),
+            "extra_css": self.extra_css,
             "content": liquid::model::to_value(&self.content)
-                 .expect("Failed to serialize content HashMap to liquid value")
+                 .expect("Failed to serialize content HashMap to liquid value"),
         })
     }
 }
@@ -372,7 +373,8 @@ mod tests {
 
         let liquid_globals = LiquidGlobals {
             page: page_page.clone(),
-            content: content_map.clone(), // Clone for the struct
+            content: content_map.clone(),
+            extra_css: "".into(),
         };
 
         let liquid_object = liquid_globals.to_liquid_data();
