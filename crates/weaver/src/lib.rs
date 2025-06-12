@@ -245,7 +245,6 @@ impl Weaver {
         let extra_css = self.get_css_for_theme();
 
         for document_arc_mutex in self.documents.iter() {
-            let extra_css_clone = extra_css.clone();
             let doc_arc_mutex_clone = Arc::clone(document_arc_mutex);
             let config_arc = Arc::clone(&self.config);
 
@@ -255,8 +254,7 @@ impl Weaver {
                     config_arc.content_dir.clone().into(),
                     doc_guard.at_path.clone().into(),
                 );
-                let mut liquid_page = LiquidGlobalsPage::from(&*doc_guard);
-                liquid_page.extra_css = extra_css_clone;
+                let liquid_page = LiquidGlobalsPage::from(&*doc_guard);
 
                 (KString::from(route), liquid_page)
             }));
@@ -284,6 +282,7 @@ impl Weaver {
             let all_liquid_pages_map_clone = Arc::clone(&all_liquid_pages_map_arc);
             let mut globals =
                 LiquidGlobals::new(Arc::clone(&document_arc), &all_liquid_pages_map_clone).await;
+            globals.extra_css = extra_css.clone();
 
             let templates = Arc::clone(&templates_arc);
             let config = Arc::clone(&config_arc);
