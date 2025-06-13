@@ -1,5 +1,6 @@
 use config::{TemplateLang, WeaverConfig};
 use document::Document;
+use filters::json::JSON;
 use futures::future::join_all;
 use glob::glob;
 use liquid::model::KString;
@@ -269,10 +270,14 @@ impl Weaver {
         }
 
         let all_liquid_pages_map_arc = Arc::new(all_liquid_pages_map);
+        let all_content_feeds_copy = Arc::clone(&all_liquid_pages_map_arc);
 
         let templates_arc = Arc::new(self.templates.clone());
+        // TODO: I need to find a smarter way to do this, I thought Arc was multiple owner
+        // but across threads, I don't know man. Have to create a copy for every task?
         let config_arc_copy = Arc::clone(&self.config);
         let config_arc_well_known = Arc::clone(&self.config);
+        let config_arc_feeds = Arc::clone(&self.config);
         let partials_arc = Arc::new(self.partials.clone());
 
         let mut tasks = vec![];
@@ -351,6 +356,43 @@ impl Weaver {
         });
 
         tasks.push(well_known_copy_task);
+
+        let feeds_task = tokio::spawn(async move {
+            let config = Arc::clone(&config_arc_feeds);
+            let target = config.build_dir.clone();
+            let sitemap_template = include_str!("feed_templates/sitemap.xml.liquid");
+
+            let parser = liquid::ParserBuilder::with_stdlib()
+                .filter(JSON)
+                .build()
+                .unwrap();
+            let globals = LiquidGlobals::new(
+                Arc::new(Mutex::new(Document::default())),
+                &all_content_feeds_copy,
+                config,
+            )
+            .await;
+
+            match parser.parse(sitemap_template) {
+                Ok(parsed) => match parsed.render(&globals.to_liquid_data()) {
+                    Ok(result) => Ok(WritableFile {
+                        contents: result,
+                        path: format!("{}/sitemap.xml", &target).into(),
+                        emit: true,
+                    }),
+                    Err(err) => {
+                        eprintln!("Sitemap template rendering error {:#?}", &err);
+                        Err(BuildError::Err(err.to_string()))
+                    }
+                },
+                Err(err) => {
+                    eprintln!("Sitemap template rendering error {:#?}", &err);
+                    Err(BuildError::Err(err.to_string()))
+                }
+            }
+        });
+
+        tasks.push(feeds_task);
 
         let render_results: Vec<Result<Result<WritableFile, BuildError>, tokio::task::JoinError>> =
             join_all(tasks).await; // Await all rendering tasks
