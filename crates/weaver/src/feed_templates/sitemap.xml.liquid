@@ -1,9 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-	{% for piece in content %}
-		  <url>
-			<loc>piece.route</loc>
-			<lastmod>piece.last_updated</lastmod>
-		  </url>
+	{% for key in content %}
+		{% assign route = content[key].route | default: "" %}
+	{{ route | json }}
+		{% if route != "" %}
+				<url>
+					<loc>{{ content[key].route }}</loc>
+					<lastmod>{{ content[key].last_updated }}</lastmod>
+				</url>
+		{% else %}
+			{% for piece in content[key] %}
+				<url>
+					<loc>{{ piece.route }}</loc>
+					<lastmod>{{ piece.last_updated }}</lastmod>
+				</url>
+			{% endfor %}
+		{% endif %}
 	{% endfor %}
 </urlset>

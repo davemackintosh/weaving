@@ -394,7 +394,8 @@ mod tests {
         assert!(liquid_map.contains_key(&KString::from("page")));
         assert!(liquid_map.contains_key(&KString::from("content")));
         assert!(liquid_map.contains_key(&KString::from("extra_css")));
-        assert_eq!(liquid_map.size(), 3);
+        assert!(liquid_map.contains_key(&KString::from("site_config")));
+        assert_eq!(liquid_map.size(), 4);
 
         /*let page_value = liquid_map.get(&KString::from("page")).unwrap();
         let expected_page_liquid_value = page_page.to_liquid_data();
