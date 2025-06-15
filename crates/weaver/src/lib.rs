@@ -16,6 +16,9 @@ use syntect::{
     highlighting::ThemeSet,
     html::{ClassStyle, css_for_theme_with_class_style},
 };
+use tasks::{
+    WeaverTask, public_copy_task::PublicCopyTask, well_known_copy_task::WellKnownCopyTask,
+};
 use template::Template;
 use tokio::sync::Mutex;
 
@@ -31,28 +34,11 @@ pub mod partial;
 pub mod renderers;
 pub mod routes;
 pub mod slugify;
+pub mod tasks;
 pub mod template;
 
 use std::fs;
 use std::path::Path;
-
-fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result<WritableFile, BuildError> {
-    fs::create_dir_all(&dst).unwrap();
-    for entry in fs::read_dir(src).unwrap() {
-        let entry = entry.unwrap();
-        let ty = entry.file_type().unwrap();
-        if ty.is_dir() {
-            copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
-        } else {
-            fs::copy(entry.path(), dst.as_ref().join(entry.file_name())).unwrap();
-        }
-    }
-    Ok(WritableFile {
-        contents: "".into(),
-        path: "".into(),
-        emit: true,
-    })
-}
 
 // Helper function to normalize line endings in a byte vector
 pub fn normalize_line_endings(bytes: &[u8]) -> String {
@@ -103,6 +89,7 @@ pub struct Weaver {
     pub templates: Vec<Arc<Mutex<Template>>>,
     pub documents: Vec<Arc<Mutex<Document>>>,
     pub partials: Vec<Partial>,
+    tasks: Vec<Arc<&dyn WeaverTask>>,
     all_documents_by_route: HashMap<KString, Arc<Mutex<Document>>>,
 }
 
@@ -116,6 +103,7 @@ impl Weaver {
             partials: vec![],
             documents: vec![],
             all_documents_by_route: HashMap::new(),
+            tasks: vec![PublicCopyTask::default(), WellKnownCopyTask::default()],
         }
     }
 
@@ -307,55 +295,6 @@ impl Weaver {
 
             tasks.push(doc_task);
         }
-
-        let public_copy_task = tokio::spawn(async move {
-            let config = Arc::clone(&config_arc_copy);
-            let folder_name = config
-                .public_dir
-                .clone()
-                .split('/')
-                .next_back()
-                .unwrap()
-                .to_string();
-            let target = format!("{}/{}", config.build_dir.clone(), folder_name);
-
-            if fs::exists(&config.public_dir)
-                .expect("failed to check if there was a public directory")
-            {
-                println!("Copying {} to {}", config.public_dir.clone(), &target);
-
-                copy_dir_all(config.public_dir.clone(), target)
-            } else {
-                Ok(WritableFile {
-                    contents: "".into(),
-                    path: "".into(),
-                    emit: false,
-                })
-            }
-        });
-
-        tasks.push(public_copy_task);
-
-        let well_known_copy_task = tokio::spawn(async move {
-            let config = Arc::clone(&config_arc_well_known);
-            let well_known_path = format!("{}/.well-known", &config.base_dir);
-            let target = format!("{}/.well-known", config.build_dir.clone());
-
-            if fs::exists(well_known_path).expect("failed to check if there was a public directory")
-            {
-                println!("Copying {} to {}", config.public_dir.clone(), &target);
-
-                copy_dir_all(config.public_dir.clone(), target)
-            } else {
-                Ok(WritableFile {
-                    contents: "".into(),
-                    path: "".into(),
-                    emit: false,
-                })
-            }
-        });
-
-        tasks.push(well_known_copy_task);
 
         let feeds_task = tokio::spawn(async move {
             let config = Arc::clone(&config_arc_feeds);
