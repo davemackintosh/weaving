@@ -31,7 +31,7 @@ pub trait ContentRenderer {
         &self,
         data: &mut LiquidGlobals,
         partials: Vec<Partial>,
-    ) -> Result<WritableFile, BuildError>;
+    ) -> Result<Option<WritableFile>, BuildError>;
 }
 
 fn out_path_for_document(document: &Document, weaver_config: &Arc<crate::WeaverConfig>) -> PathBuf {
@@ -59,7 +59,7 @@ impl<'a> ContentRenderer for TemplateRenderer<'a> {
         &self,
         data: &mut LiquidGlobals,
         _partials: Vec<Partial>,
-    ) -> Result<WritableFile, BuildError> {
+    ) -> Result<Option<WritableFile>, BuildError> {
         match self {
             Self::LiquidBuilder {
                 liquid_parser,
@@ -71,11 +71,11 @@ impl<'a> ContentRenderer for TemplateRenderer<'a> {
 
                 match liquid_parser.parse(&wtemplate.contents) {
                     Ok(parsed) => match parsed.render(&data.to_liquid_data()) {
-                        Ok(result) => Ok(WritableFile {
+                        Ok(result) => Ok(Some(WritableFile {
                             contents: result,
                             path: out_path_for_document(for_document, weaver_config),
                             emit: for_document.emit,
-                        }),
+                        })),
                         Err(err) => {
                             eprintln!(
                                 "Template rendering error '{}' {:#?}",
@@ -141,7 +141,7 @@ impl ContentRenderer for MarkdownRenderer {
         &self,
         data: &mut LiquidGlobals,
         partials: Vec<Partial>,
-    ) -> Result<WritableFile, BuildError> {
+    ) -> Result<Option<WritableFile>, BuildError> {
         let doc_guard = self.document.lock().await;
         let template = self
             .find_template_by_string(doc_guard.metadata.template.clone())
@@ -161,11 +161,15 @@ impl ContentRenderer for MarkdownRenderer {
             .render(&mut data.to_owned(), partials.clone())
             .await?;
 
+        if body_html.is_none() {
+            return Ok(None);
+        }
+
         let mut markdown_plugins = Plugins::default();
         let markdown_syntax_hl_adapter = SyntectAdapterBuilder::new().css().build();
         markdown_plugins.render.codefence_syntax_highlighter = Some(&markdown_syntax_hl_adapter);
         let markdown_html = markdown_to_html_with_plugins(
-            body_html.contents.as_str(),
+            body_html.unwrap().contents.as_str(),
             &Options {
                 render: RenderOptions {
                     unsafe_: true,
@@ -286,7 +290,7 @@ mod test {
                 path: format!("{}/site/with_headings/index.html", base_path).into(),
                 emit: true,
             },
-            renderer.render(&mut data, vec![]).await.unwrap()
+            renderer.render(&mut data, vec![]).await.unwrap().unwrap()
         );
     }
 
@@ -353,7 +357,7 @@ mod test {
                 path: format!("{}/site/with_headings/index.html", base_path).into(),
                 emit: true,
             },
-            result.unwrap()
+            result.unwrap().unwrap()
         );
     }
 }
