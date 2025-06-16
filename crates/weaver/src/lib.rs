@@ -1,6 +1,5 @@
 use config::{TemplateLang, WeaverConfig};
 use document::Document;
-use filters::json::JSON;
 use futures::future::join_all;
 use glob::glob;
 use liquid::model::KString;
@@ -20,10 +19,10 @@ use tasks::{
     WeaverTask, public_copy_task::PublicCopyTask, well_known_copy_task::WellKnownCopyTask,
 };
 use template::Template;
-use tokio::sync::Mutex;
+use tokio::{sync::Mutex, task::JoinHandle};
 
-/// Weaver is the library that powers weaving, as in Hugo Weaving. It does nothing but compile
-/// templates and markdown files to their static counterparts.
+/// Weaver is the library that powers weaving, as in Hugo Weaving. It is the manager of all things
+/// to do with the building of your site and all of it's content.
 /// There is zero requirement for a config file at all, defaults are used- however specifying
 /// content locations can vary from user to user so afford them the opportunity to do so.
 pub mod config;
@@ -36,9 +35,6 @@ pub mod routes;
 pub mod slugify;
 pub mod tasks;
 pub mod template;
-
-use std::fs;
-use std::path::Path;
 
 // Helper function to normalize line endings in a byte vector
 pub fn normalize_line_endings(bytes: &[u8]) -> String {
@@ -89,8 +85,8 @@ pub struct Weaver {
     pub templates: Vec<Arc<Mutex<Template>>>,
     pub documents: Vec<Arc<Mutex<Document>>>,
     pub partials: Vec<Partial>,
-    tasks: Vec<Arc<&dyn WeaverTask>>,
-    all_documents_by_route: HashMap<KString, Arc<Mutex<Document>>>,
+    pub all_documents_by_route: HashMap<KString, Arc<Mutex<Document>>>,
+    tasks: Vec<Box<dyn WeaverTask>>,
 }
 
 impl Weaver {
@@ -103,7 +99,7 @@ impl Weaver {
             partials: vec![],
             documents: vec![],
             all_documents_by_route: HashMap::new(),
-            tasks: vec![PublicCopyTask::default(), WellKnownCopyTask::default()],
+            tasks: vec![Box::new(PublicCopyTask {}), Box::new(WellKnownCopyTask {})],
         }
     }
 
@@ -258,18 +254,18 @@ impl Weaver {
         }
 
         let all_liquid_pages_map_arc = Arc::new(all_liquid_pages_map);
-        let all_content_feeds_copy = Arc::clone(&all_liquid_pages_map_arc);
 
         let templates_arc = Arc::new(self.templates.clone());
         // TODO: I need to find a smarter way to do this, I thought Arc was multiple owner
         // but across threads, I don't know man. Have to create a copy for every task?
         let config_arc_copy = Arc::clone(&self.config);
-        let config_arc_well_known = Arc::clone(&self.config);
-        let config_arc_feeds = Arc::clone(&self.config);
         let partials_arc = Arc::new(self.partials.clone());
 
-        let mut tasks = vec![];
+        let mut tasks: Vec<JoinHandle<Result<Option<WritableFile>, BuildError>>> = vec![];
 
+        // Documents are going to stay here for now, at least until I realise a safe way
+        // to order tasks or have some kind of topological graph for tasks since they all
+        // require documents.
         for document_arc_mutex in &self.documents {
             let document_arc = Arc::clone(document_arc_mutex);
 
@@ -296,55 +292,27 @@ impl Weaver {
             tasks.push(doc_task);
         }
 
-        let feeds_task = tokio::spawn(async move {
-            let config = Arc::clone(&config_arc_feeds);
-            let target = config.build_dir.clone();
-            let sitemap_template = include_str!("feed_templates/sitemap.xml.liquid");
+        tasks.extend(self.tasks.iter().map(|t| {
+            let config = Arc::clone(&config_arc_copy);
+            tokio::spawn(async { t.run(config).await })
+        }));
 
-            let parser = liquid::ParserBuilder::with_stdlib()
-                .filter(JSON)
-                .build()
-                .unwrap();
-            let globals = LiquidGlobals::new(
-                Arc::new(Mutex::new(Document::default())),
-                &all_content_feeds_copy,
-                config,
-            )
-            .await;
-
-            match parser.parse(sitemap_template) {
-                Ok(parsed) => match parsed.render(&globals.to_liquid_data()) {
-                    Ok(result) => Ok(WritableFile {
-                        contents: result,
-                        path: format!("{}/sitemap.xml", &target).into(),
-                        emit: true,
-                    }),
-                    Err(err) => {
-                        eprintln!("Sitemap template rendering error {:#?}", &err);
-                        Err(BuildError::Err(err.to_string()))
-                    }
-                },
-                Err(err) => {
-                    eprintln!("Sitemap template rendering error {:#?}", &err);
-                    Err(BuildError::Err(err.to_string()))
-                }
-            }
-        });
-
-        tasks.push(feeds_task);
-
-        let render_results: Vec<Result<Result<WritableFile, BuildError>, tokio::task::JoinError>> =
-            join_all(tasks).await; // Await all rendering tasks
+        let render_results: Vec<
+            Result<Result<Option<WritableFile>, BuildError>, tokio::task::JoinError>,
+        > = join_all(tasks).await; // Await all rendering tasks
 
         // Process the results of all rendering tasks
         for join_result in render_results {
             match join_result {
                 Ok(render_result) => match render_result {
-                    Ok(writable_file) => {
-                        if writable_file.path.as_os_str() != "" && writable_file.emit {
-                            self.write_result_to_system(writable_file).await?;
+                    Ok(writable_file_option) => match writable_file_option {
+                        Some(writable_file) => {
+                            if writable_file.path.as_os_str() != "" && writable_file.emit {
+                                self.write_result_to_system(writable_file).await?;
+                            }
                         }
-                    }
+                        None => continue,
+                    },
                     Err(render_error) => {
                         eprintln!("Rendering error: {}", render_error.red());
                         return Err(render_error);
