@@ -2254,7 +2254,7 @@ dependencies = [
 
 [[package]]
 name = "weaver-lib"
-version = "0.2.7"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2279,7 +2279,7 @@ dependencies = [
 
 [[package]]
 name = "weaving"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "bindet",
  "clap",
