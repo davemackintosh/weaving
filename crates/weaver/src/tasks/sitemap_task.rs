@@ -8,7 +8,7 @@ use crate::{
     BuildError,
     config::WeaverConfig,
     document::Document,
-    filters::json::JSON,
+    filters::{has_key::HasKey, json::JSON},
     renderers::{
         WritableFile,
         globals::{LiquidGlobals, LiquidGlobalsPage},
@@ -35,6 +35,7 @@ impl WeaverTask for SiteMapTask {
 
         let parser = liquid::ParserBuilder::with_stdlib()
             .filter(JSON)
+            .filter(HasKey)
             .build()
             .unwrap();
         let globals =

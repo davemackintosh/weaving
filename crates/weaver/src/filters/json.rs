@@ -12,7 +12,7 @@ use liquid_core::{Value, ValueView};
 pub struct JSON;
 
 #[derive(Debug, Default, Display_filter)]
-#[name = "raw"]
+#[name = "json"]
 struct JSONFilter;
 
 impl Filter for JSONFilter {
