@@ -1,7 +1,8 @@
 use chrono::{DateTime, Local};
 use gray_matter::{Matter, engine::YAML};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::PathBuf};
+use std::collections::BTreeMap as Map;
+use std::path::PathBuf;
 use toml::Value;
 
 use crate::{document_toc::toc_from_document, normalize_line_endings};
@@ -38,7 +39,7 @@ pub struct BaseMetaData {
     pub excerpt: Option<String>,
 
     #[serde(flatten)]
-    pub user: HashMap<String, Value>,
+    pub user: Map<String, Value>,
 }
 
 impl Default for BaseMetaData {
@@ -52,7 +53,7 @@ impl Default for BaseMetaData {
             published: None,
             last_updated: None,
             emit: true,
-            user: HashMap::new(),
+            user: Map::new(),
             excerpt: None,
         }
     }
@@ -152,10 +153,54 @@ mod test {
             description: "test".into(),
             published: Some(time.to_string()),
             last_updated: Some(time.to_string()),
-            user: HashMap::new(),
             emit: true,
-            template: "default".into(),
             excerpt: Some("testing".into()),
+            ..Default::default()
+        };
+
+        assert_eq!(expected.tags, document.metadata.tags);
+        assert_eq!(expected.keywords, document.metadata.keywords);
+        assert_eq!(expected.title, document.metadata.title);
+        assert_eq!(expected.description, document.metadata.description);
+        assert_eq!(expected.excerpt, document.metadata.excerpt);
+        assert_eq!(expected.user, document.metadata.user);
+        assert_eq!(expected.emit, document.metadata.emit);
+        assert_eq!(expected.template, document.metadata.template);
+        assert!(document.metadata.published.is_some());
+        assert!(document.metadata.last_updated.is_some());
+    }
+
+    #[test]
+    fn test_document_loading_with_user_metadata() {
+        let base_path_wd = std::env::current_dir()
+            .unwrap()
+            .as_os_str()
+            .to_os_string()
+            .to_str()
+            .unwrap()
+            .to_string();
+        let base_path = format!("{}/test_fixtures/markdown", base_path_wd);
+        let document = Document::new_from_path(
+            base_path.clone().into(),
+            format!("{}/user_metadata.md", &base_path).into(),
+        );
+        let time: DateTime<Local> = Local::now();
+        let expected = BaseMetaData {
+            tags: vec!["1".into()],
+            keywords: vec!["2".into()],
+            title: "test".into(),
+            description: "test".into(),
+            published: Some(time.to_string()),
+            last_updated: Some(time.to_string()),
+            emit: true,
+            excerpt: Some("testing".into()),
+            user: Map::from([
+                (
+                    "author".into(),
+                    toml::Value::from("Dave Mackintosh".to_string()),
+                ),
+                ("custom_property".into(), toml::Value::from(123)),
+            ]),
             ..Default::default()
         };
 
