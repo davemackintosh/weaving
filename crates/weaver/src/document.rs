@@ -53,7 +53,7 @@ impl Default for BaseMetaData {
             published: None,
             last_updated: None,
             emit: true,
-            user: Map::from([("build".into(), toml::Value::from(true))]),
+            user: Map::new(),
             excerpt: None,
         }
     }
@@ -87,9 +87,6 @@ impl Document {
         }
 
         let mut base_metadata = base_metadata_opt.unwrap();
-        base_metadata
-            .user
-            .insert("build".into(), toml::Value::from(true));
 
         // If there's no published in the base_metadata, we will use the file's created at meta.
         if base_metadata.published.is_some() {
