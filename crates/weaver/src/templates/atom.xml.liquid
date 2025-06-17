@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+	<title>Atom Feed</title>
+  <link href="{{ site_config.base_url }}"/>
+  <updated>2003-12-13T18:30:02Z</updated>
+  <id>{{ site_config.base_url }}</id>
+
+	{% for content in content %}
+			{% for sub_content in content[1] %}
+				{% if sub_content.meta.emit %}
+					<url>
+						<loc>{{ site_config.base_url }}{{ sub_content.route }}</loc>
+						<lastmod>{{ sub_content.meta.last_updated }}</lastmod>
+					</url>
+					<entry>
+						<title>{{ sub_content.meta.title }}</title>
+						<link href="{{ site_config.base_url }}{{ sub_content.route }}"/>
+						<id>{{ site_config.base_url }}{{ sub_content.route }}</id>
+						<published>{{ sub_content.meta.published }}</published>
+						<updated>{{ sub_content.meta.last_updated }}</updated>
+
+						{% assign author = sub_content.meta.user.author | default: "" %}
+						{% if author != "" %}
+							<contributor>
+								<name>{{ author }}</name>
+							</contributor>
+						{% endif %}
+
+						{% assign excerpt = sub_content.meta.user.excerpt | default: "" %}
+						{% if excerpt != "" %}
+							<summary>{{ excerpt }}</summary>
+						{% endif %}
+					</entry>
+				{% endif %}
+			{% endfor %}
+	{% endfor %}
+</feed>

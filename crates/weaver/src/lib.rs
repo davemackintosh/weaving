@@ -16,8 +16,8 @@ use syntect::{
     html::{ClassStyle, css_for_theme_with_class_style},
 };
 use tasks::{
-    WeaverTask, public_copy_task::PublicCopyTask, sitemap_task::SiteMapTask,
-    well_known_copy_task::WellKnownCopyTask,
+    WeaverTask, atom_feed_task::AtomFeedTask, public_copy_task::PublicCopyTask,
+    sitemap_task::SiteMapTask, well_known_copy_task::WellKnownCopyTask,
 };
 use template::Template;
 use tokio::{sync::Mutex, task::JoinHandle};
@@ -104,6 +104,7 @@ impl Weaver {
                 Arc::new(Box::new(PublicCopyTask {})),
                 Arc::new(Box::new(WellKnownCopyTask {})),
                 Arc::new(Box::new(SiteMapTask {})),
+                Arc::new(Box::new(AtomFeedTask {})),
             ],
         }
     }

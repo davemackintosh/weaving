@@ -134,7 +134,7 @@ mod test {
         assert_eq!(config.partials_dir, format!("{}/partials", base_path));
         assert_eq!(config.public_dir, format!("{}/public", base_path));
         assert_eq!(config.build_dir, format!("{}/site", base_path));
-        assert_eq!(config.base_url, "localhost:8080");
+        assert_eq!(config.base_url, "http://localhost:8080");
     }
 
     #[test]
@@ -154,7 +154,7 @@ mod test {
         assert_eq!(config.partials_dir, format!("{}/partials", base_path));
         assert_eq!(config.public_dir, format!("{}/public", base_path));
         assert_eq!(config.build_dir, format!("{}/site", base_path));
-        assert_eq!(config.base_url, "localhost:8080");
+        assert_eq!(config.base_url, "http://localhost:8080");
     }
 
     #[test]
@@ -185,6 +185,6 @@ mod test {
         assert_eq!(config.partials_dir, format!("{}/partials", base_path));
         assert_eq!(config.public_dir, format!("{}/static", base_path));
         assert_eq!(config.build_dir, format!("{}/site", base_path));
-        assert_eq!(config.base_url, "localhost:8080");
+        assert_eq!(config.base_url, "http://localhost:8080");
     }
 }
