@@ -1,14 +1,18 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
+use liquid::model::KString;
 use tokio::sync::Mutex;
 
 use crate::{
-    BuildError, Weaver,
+    BuildError,
     config::WeaverConfig,
     document::Document,
     filters::json::JSON,
-    renderers::{WritableFile, globals::LiquidGlobals},
+    renderers::{
+        WritableFile,
+        globals::{LiquidGlobals, LiquidGlobalsPage},
+    },
 };
 
 use super::WeaverTask;
@@ -21,20 +25,20 @@ unsafe impl Sync for SiteMapTask {}
 
 #[async_trait]
 impl WeaverTask for SiteMapTask {
-    async fn run(&self, config: Arc<WeaverConfig>) -> Result<Option<WritableFile>, BuildError> {
+    async fn run(
+        &self,
+        config: Arc<WeaverConfig>,
+        content: &Arc<HashMap<KString, LiquidGlobalsPage>>,
+    ) -> Result<Option<WritableFile>, BuildError> {
         let target = config.build_dir.clone();
-        let sitemap_template = include_str!("../feed_templates/sitemap.xml.liquid");
+        let sitemap_template = include_str!("../templates/sitemap.xml.liquid");
 
         let parser = liquid::ParserBuilder::with_stdlib()
             .filter(JSON)
             .build()
             .unwrap();
-        let globals = LiquidGlobals::new(
-            Arc::new(Mutex::new(Document::default())),
-            &all_content_feeds_copy,
-            config,
-        )
-        .await;
+        let globals =
+            LiquidGlobals::new(Arc::new(Mutex::new(Document::default())), content, config).await;
 
         match parser.parse(sitemap_template) {
             Ok(parsed) => match parsed.render(&globals.to_liquid_data()) {

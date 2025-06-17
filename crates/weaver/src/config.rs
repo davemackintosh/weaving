@@ -64,11 +64,17 @@ impl Default for WeaverConfig {
             .unwrap()
             .to_string();
 
+        let base_url = std::env::var_os("WEAVING_BASE_URL")
+            .unwrap_or("http://localhost:8080".into())
+            .to_str()
+            .unwrap()
+            .to_string();
+
         Self {
             version: "1".into(),
             base_dir: base_path.clone(),
             content_dir: "content".into(),
-            base_url: "localhost:8080".into(),
+            base_url,
             partials_dir: "partials".into(),
             public_dir: "public".into(),
             build_dir: "site".into(),

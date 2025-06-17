@@ -3,13 +3,22 @@ pub mod public_copy_task;
 pub mod sitemap_task;
 pub mod well_known_copy_task;
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
+use liquid::model::KString;
 
-use crate::{BuildError, config::WeaverConfig, renderers::WritableFile};
+use crate::{
+    BuildError,
+    config::WeaverConfig,
+    renderers::{WritableFile, globals::LiquidGlobalsPage},
+};
 
 #[async_trait]
 pub trait WeaverTask: Send + Sync {
-    async fn run(&self, config: Arc<WeaverConfig>) -> Result<Option<WritableFile>, BuildError>;
+    async fn run(
+        &self,
+        config: Arc<WeaverConfig>,
+        content: &Arc<HashMap<KString, LiquidGlobalsPage>>,
+    ) -> Result<Option<WritableFile>, BuildError>;
 }
