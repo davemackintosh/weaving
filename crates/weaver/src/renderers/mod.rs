@@ -11,6 +11,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::config::TemplateLang;
+use crate::filters::has_key::HasKey;
 use crate::filters::json::JSON;
 use crate::filters::raw_html::RawHtml;
 use crate::partial::Partial;
@@ -114,6 +115,7 @@ impl<'a> TemplateRenderer<'a> {
             liquid_parser: liquid::ParserBuilder::with_stdlib()
                 .filter(RawHtml)
                 .filter(JSON)
+                .filter(HasKey)
                 .partials(registered_partials)
                 .build()
                 .unwrap(),
