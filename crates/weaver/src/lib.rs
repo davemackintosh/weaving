@@ -16,7 +16,8 @@ use syntect::{
     html::{ClassStyle, css_for_theme_with_class_style},
 };
 use tasks::{
-    WeaverTask, public_copy_task::PublicCopyTask, well_known_copy_task::WellKnownCopyTask,
+    WeaverTask, public_copy_task::PublicCopyTask, sitemap_task::SiteMapTask,
+    well_known_copy_task::WellKnownCopyTask,
 };
 use template::Template;
 use tokio::{sync::Mutex, task::JoinHandle};
@@ -86,7 +87,7 @@ pub struct Weaver {
     pub documents: Vec<Arc<Mutex<Document>>>,
     pub partials: Vec<Partial>,
     pub all_documents_by_route: HashMap<KString, Arc<Mutex<Document>>>,
-    tasks: Vec<Box<dyn WeaverTask>>,
+    tasks: Vec<Arc<Box<dyn WeaverTask>>>,
 }
 
 impl Weaver {
@@ -99,7 +100,11 @@ impl Weaver {
             partials: vec![],
             documents: vec![],
             all_documents_by_route: HashMap::new(),
-            tasks: vec![Box::new(PublicCopyTask {}), Box::new(WellKnownCopyTask {})],
+            tasks: vec![
+                Arc::new(Box::new(PublicCopyTask {})),
+                Arc::new(Box::new(WellKnownCopyTask {})),
+                Arc::new(Box::new(SiteMapTask {})),
+            ],
         }
     }
 
@@ -258,7 +263,7 @@ impl Weaver {
         let templates_arc = Arc::new(self.templates.clone());
         // TODO: I need to find a smarter way to do this, I thought Arc was multiple owner
         // but across threads, I don't know man. Have to create a copy for every task?
-        let config_arc_copy = Arc::clone(&self.config);
+        let config_arc_copy = Arc::clone(&self.config.clone());
         let partials_arc = Arc::new(self.partials.clone());
 
         let mut tasks: Vec<JoinHandle<Result<Option<WritableFile>, BuildError>>> = vec![];
@@ -293,8 +298,10 @@ impl Weaver {
         }
 
         tasks.extend(self.tasks.iter().map(|t| {
+            let t = Arc::clone(t);
             let config = Arc::clone(&config_arc_copy);
-            tokio::spawn(async { t.run(config).await })
+            let content = Arc::clone(&all_liquid_pages_map_arc);
+            tokio::spawn(async move { t.run(config, &content).await })
         }));
 
         let render_results: Vec<

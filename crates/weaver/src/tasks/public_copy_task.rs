@@ -1,10 +1,13 @@
-use std::{fs, sync::Arc};
+use std::{collections::HashMap, fs, sync::Arc};
 
 use async_trait::async_trait;
-use tokio::sync::Mutex;
+use liquid::model::KString;
 
 use crate::{
-    BuildError, config::WeaverConfig, renderers::WritableFile, tasks::common::copy_dir_all,
+    BuildError,
+    config::WeaverConfig,
+    renderers::{WritableFile, globals::LiquidGlobalsPage},
+    tasks::common::copy_dir_all,
 };
 
 use super::WeaverTask;
@@ -17,7 +20,11 @@ unsafe impl Sync for PublicCopyTask {}
 
 #[async_trait]
 impl WeaverTask for PublicCopyTask {
-    async fn run(&self, config: Arc<WeaverConfig>) -> Result<Option<WritableFile>, BuildError> {
+    async fn run(
+        &self,
+        config: Arc<WeaverConfig>,
+        _content: &Arc<HashMap<KString, LiquidGlobalsPage>>,
+    ) -> Result<Option<WritableFile>, BuildError> {
         let folder_name = config
             .public_dir
             .clone()

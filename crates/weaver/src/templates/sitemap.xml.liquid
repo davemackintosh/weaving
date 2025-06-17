@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+	{% for content in content %}
+			{% for sub_content in content[1] %}
+				{% if sub_content.meta.emit %}
+					<url>
+						<loc>{{site_config.base_url}}{{ sub_content.route }}</loc>
+						<lastmod>{{ sub_content.meta.last_updated }}</lastmod>
+					</url>
+				{% endif %}
+			{% endfor %}
+	{% endfor %}
+</urlset>

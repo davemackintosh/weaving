@@ -146,8 +146,10 @@ pub fn serve_catchall(safe_path: &Path, request: &Request) -> Response {
         format!("{}/index.html", file_path.display()).into()
     } else if req_path.starts_with(public_root) {
         file_path
-    } else {
+    } else if !file_path.exists() || file_path.is_dir() {
         format!("{}/index.html", file_path.display()).into()
+    } else {
+        file_path
     };
 
     println!("Serving: {:?}", &file_path.green());
