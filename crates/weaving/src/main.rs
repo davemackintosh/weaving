@@ -139,14 +139,14 @@ address = "localhost:8080"
             );
 
             let clients: WsClients = Arc::new(Mutex::new(Vec::new()));
-            let clients_clone = clients.clone(); // For HTTP server thread
-            let clients_broadcast = clients.clone(); // For broadcasting thread
+            let clients_clone = clients.clone();
+            let clients_broadcast = clients.clone();
 
             let (file_change_tx, mut file_change_rx): (
                 UnboundedSender<String>,
                 UnboundedReceiver<String>,
             ) = unbounded_channel();
-            let file_change_tx_for_watcher = file_change_tx.clone(); // For watcher thread
+            let file_change_tx_for_watcher = file_change_tx.clone();
 
             serve_tasks.push(tokio::spawn(async move {
                 while let Some(message) = file_change_rx.recv().await {
@@ -173,7 +173,6 @@ address = "localhost:8080"
                     );
                 }
             }));
-            // --- End WebSocket setup ---
 
             let watch_path = safe_path.clone();
 
@@ -217,7 +216,7 @@ address = "localhost:8080"
                                         .scan_templates()
                                         .scan_partials()
                                         .build()
-                                        .await; // This await needs tokio runtime
+                                        .await;
 
                                     match build_result {
                                         Ok(_) => {
