@@ -2,14 +2,15 @@
 
 A super easy to use static site generator, no config required (config is optional.)
 
-Why "weaving?" I was looking for a static site generator that was well documented and predictable. Closest I found was Hugo and then I got to thinking- I haven't seen that film with Hugo Weaving in it where he wears a dress for ages.
+**Why "weaving?"**
 
-Weaving.
-
-/shrug
+> I was looking for a static site generator that was well documented and predictable. Closest I found was Hugo and then I got to thinking- I haven't seen that film with Hugo Weaving in it where he wears a dress for ages.
+> Weaving.
+> /shrug
 
 ## Installation
 
+> [!NOTE]
 > I'm working on distributing across different package managers.
 
 Running `cargo install weaving` will install the `weaving` command to your system.
@@ -50,21 +51,77 @@ description: String?
 user: Map<String, any>
 ```
 
-The built in filters in liquid templates are:
+#### Liquid filters
+
+`json` will output to the page a JSON stringified version of the variable to it's left.
+
+`hasKey: "keyName"` returns a boolean, even in strict mode as to whether or not the object to the left contains a key with that name. This is useful for checking for the existence of a key at render time without tripping the strict parser rules.
+
+
+> [!NOTE]
+> The following filters closely align with Shopify's Liquid filters.
+
+The built in filters in you can use in your liquid templates are (matching behaviour from the Shopify filters):
 
 ```
-abs, append, at_least, at_most, capitalize, ceil, compact, concat, date, default, divided_by, downcase, escape, escape_once, first, floor, join, last, lstrip, map, minus, modulo, newline_to_br, plus, prepend, raw, remove, remove_first, replace, replace_first, reverse, round, rstrip, size, slice, sort, sort_natural, split, strip, strip_html, strip_newlines, times, truncate, truncatewords, uniq, upcase, url_decode, url_encode, where
+abs
+append
+at_least,
+at_most,
+capitalize,
+ceil,
+compact,
+concat,
+date,
+default,
+divided_by,
+downcase,
+escape,
+escape_once
+first,
+floor,
+join,
+last,
+lstrip,
+map,
+minus,
+modulo,
+newline_to_br,
+plus,
+prepend,
+raw,
+remove,
+remove_first,
+replace,
+replace_first,
+reverse,
+round,
+rstrip,
+size,
+slice
+sort,
+sort_natural,
+split,
+strip,
+strip_html,
+strip_newlines,
+times,
+truncate,
+truncatewords,
+uniq,
+upcase,
+url_decode,
+url_encode,
+where
 ```
-
-There is another filter built specifically for weaving `raw` which will dangerously output anything without any formatting or XSS protection. I don't recommend it's use anywhere other than outputting built in content.
 
 ### `weaving.toml`
 
 All config is optional, the default config is this:
 
-> NOTE image_config is currently unused but I plan to add image optimisation very soon
-
-> NOTE npm_build is also unused, again I will be adding the ability to run a concurrent build command soon.
+> [!IMPORTANT]
+> image_config is currently unused but I plan to add image optimisation very soon
+> npm_build is also unused, again I will be adding the ability to run a concurrent build command soon.
 
 ```toml
 version = 1

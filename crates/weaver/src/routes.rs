@@ -10,10 +10,11 @@ pub fn route_from_path(content_dir: PathBuf, path: PathBuf) -> String {
             // Handle this error case appropriately, e.g., panic, return an error, or log.
             // For now, let's just panic and halt the build because this won't output something
             // visible or usable to anyone.
-            panic!(
+            println!(
                 "Warning: Path {:?} is not within content directory {:?}",
                 path, content_dir
             );
+            return "".to_string();
         }
     };
 

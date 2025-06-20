@@ -1,4 +1,5 @@
 pub mod atom_feed_task;
+pub mod clean_build_dir;
 pub mod common;
 pub mod public_copy_task;
 pub mod sitemap_task;
