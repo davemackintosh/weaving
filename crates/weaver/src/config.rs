@@ -111,6 +111,28 @@ impl WeaverConfig {
             ..user_supplied_config
         }
     }
+
+    pub fn get_merged_watch_exclude_patterns(&self) -> Vec<String> {
+        let non_negotiable_excludes = vec![
+            ".git",
+            ".*/node_modules.*",
+            "site",
+            "\\.DS_Store", // macOS temp files
+            "Thumbs\\.db", // Windows temp files
+            "\\.swp$",     // Vim/Neovim swap files
+            "~$",          // Vim/Neovim backup files (ending with ~)
+            "\\.bak$",     // Common backup extension
+            "\\.tmp$",     // Generic temporary files
+            "^\\.#.*$",    // Neovim's dot-hash temp files (e.g., .#filename)
+        ];
+
+        let mut all_excludes = self.serve_config.watch_excludes.clone();
+        for exclude in non_negotiable_excludes {
+            all_excludes.push(exclude.into());
+        }
+
+        all_excludes
+    }
 }
 
 #[cfg(test)]

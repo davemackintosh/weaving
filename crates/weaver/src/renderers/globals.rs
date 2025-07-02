@@ -83,7 +83,7 @@ impl LiquidGlobals {
                 let f_path = first_component.unwrap();
                 match content_map.contains_key(&f_path) {
                     true => {
-                        // Don't include the "list" page in the content list.
+                        // Don't include the index page in the content list.
                         if route.clone() != format!("/{}/", f_path) {
                             let content_inner_map = content_map.get_mut(&f_path).unwrap();
                             content_inner_map.push(doc_arc_mutex.clone());

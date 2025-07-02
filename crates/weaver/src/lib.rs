@@ -142,20 +142,11 @@ impl Weaver {
         let extension = match self.config.templating_language {
             TemplateLang::Liquid => ".liquid",
         };
-        println!(
-            "Searching for {} templates in {}",
-            &extension, &self.config.partials_dir
-        );
         for entry in glob(format!("{}/**/*{}", self.config.partials_dir, extension).as_str())
             .expect("Failed to read glob pattern")
         {
             match entry {
                 Ok(pathbuf) => {
-                    println!(
-                        "Found partial {}, registering {}",
-                        pathbuf.display(),
-                        pathbuf.file_name().unwrap().to_string_lossy()
-                    );
                     let partial = Partial::new_from_path(pathbuf);
                     self.partials.push(partial);
                 }
