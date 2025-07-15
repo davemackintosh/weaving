@@ -11,6 +11,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::config::TemplateLang;
+use crate::filters::date_format::Date;
 use crate::filters::has_key::HasKey;
 use crate::filters::json::JSON;
 use crate::filters::raw_html::RawHtml;
@@ -116,6 +117,7 @@ impl<'a> TemplateRenderer<'a> {
                 .filter(RawHtml)
                 .filter(JSON)
                 .filter(HasKey)
+                .filter(Date)
                 .partials(registered_partials)
                 .build()
                 .unwrap(),
